@@ -5,7 +5,6 @@
   "user_id": "owner",
   "timezone": "Asia/Shanghai",
   "static_dir": "/opt/worklog/Web/dist",
-  "calendar_file": "",
   "token_file": "/var/lib/worklog/mcp-token",
   "write_token": "",
   "read_token": "",

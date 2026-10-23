@@ -78,9 +78,7 @@ func setup(t *testing.T, driver string) *fixture {
 	svc := service.New(st, loc)
 	svc.Now = func() time.Time { return time.Date(2026, 10, 20, 16, 30, 0, 123456789, time.UTC) }
 	cfg := config.Config{Local: true, User: "owner", AllowedHosts: []string{"127.0.0.1", "localhost"}, AllowedOrigins: []string{"http://localhost:5173"}, WriteToken: strings.Repeat("w", 32), ReadToken: strings.Repeat("r", 32), MCPDestructive: false}
-	calendar, e := service.LoadCalendar("")
-	must(t, e)
-	ts := httptest.NewServer(rest.New(svc, cfg, calendar, logger))
+	ts := httptest.NewServer(rest.New(svc, cfg, logger))
 	t.Cleanup(ts.Close)
 	return &fixture{st, svc, ts, dsn, driver, cfg}
 }
@@ -185,7 +183,6 @@ func suite(t *testing.T, driver string) {
 		httpOK(t, f, "GET", "/api/todos?done=true", nil)
 		httpOK(t, f, "GET", "/api/today", nil)
 		httpOK(t, f, "GET", "/api/worklog/dates", nil)
-		httpOK(t, f, "GET", "/api/work-calendar", nil)
 		httpOK(t, f, "DELETE", "/api/todos/"+todoid, map[string]any{"version": 2})
 		httpOK(t, f, "DELETE", "/api/tasks/"+id, map[string]any{"version": 3}) // category migration incremented task version
 		before := httpOK(t, f, "GET", "/api/dashboard", nil)

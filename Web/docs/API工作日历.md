@@ -1,23 +1,9 @@
-# 工作日历 API
+# 工作日历静态 JSON
 
-## GET `/work-calendar`
+工作日历已从后端 API 改为前端静态资源，不再提供 `GET /api/work-calendar`。
 
-返回完整工作日历配置。新部署默认无预置节假日和调休，工作日为周一至周五：
+本地模式和后端模式均读取页面同目录的 `work-calendar.json`，不使用后端 API 基础 URL，也不读取浏览器的 `worklog.v2.calendar` 缓存。源文件为 `Web/public/work-calendar.json`，构建时会复制到 `Web/dist/work-calendar.json`。
 
-```json
-{
-  "workingWeekdays": [1, 2, 3, 4, 5],
-  "holidays": [],
-  "adjustedWorkdays": []
-}
-```
+默认包含 2026 年节假日和调休。字段、优先级、单休示例、取消节日标记以及部署更新方式见[工作日历自定义](../../docs/WORK_CALENDAR.md)。
 
-字段含义：
-
-- `workingWeekdays`：不重复的星期编号，`0` 为周日，`1` 为周一，以此类推至 `6`。
-- `holidays`：节假日区间数组，元素为 `{ "name": "节日名称", "startDate": "YYYY-MM-DD", "endDate": "YYYY-MM-DD" }`。起止日期均包含在假期内，不同区间不能重叠。
-- `adjustedWorkdays`：调休工作日数组，元素为 `{ "name": "调休名称", "date": "YYYY-MM-DD" }`；日期不能重复。
-
-名称需非空，日期必须合法。日期判定优先级为：明确配置的调休工作日 > 节假日 > 每周工作日规则。未配置具体年份时，按每周规则计算。
-
-本期只提供只读接口，没有日历配置 UI 或写 API。日历由后端配置文件／管理工具维护；配置文件在服务启动时读取并校验，具体部署方式见仓库根目录 [README](../../README.md)。前端日期面板和甘特图共享同一份加载结果；加载失败时按每周规则显示，不影响任务管理。
+日期面板和甘特图共享同一份加载结果；请求、JSON 解析或结构校验失败时显示错误和重试入口，并暂按周一至周五工作、周末休息显示，不阻止任务和日志编辑。没有日历配置 UI 或写 API。

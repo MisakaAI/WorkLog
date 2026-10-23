@@ -29,15 +29,14 @@ import (
 type Server struct {
 	Service     *service.Service
 	Config      config.Config
-	Calendar    service.Calendar
 	Logger      *slog.Logger
 	limiter     *security.Limiter
 	healthSlots chan struct{}
 }
 type requestKey struct{}
 
-func New(svc *service.Service, c config.Config, calendar service.Calendar, logger *slog.Logger) http.Handler {
-	s := &Server{Service: svc, Config: c, Calendar: calendar, Logger: logger, limiter: security.NewLimiter(), healthSlots: make(chan struct{}, 4)}
+func New(svc *service.Service, c config.Config, logger *slog.Logger) http.Handler {
+	s := &Server{Service: svc, Config: c, Logger: logger, limiter: security.NewLimiter(), healthSlots: make(chan struct{}, 4)}
 	r := chi.NewRouter()
 	r.Use(middleware.GetHead)
 	r.Use(s.middleware)
@@ -77,7 +76,6 @@ func New(svc *service.Service, c config.Config, calendar service.Calendar, logge
 		r.Get("/worklog/dates", s.dates)
 		r.Get("/worklog/{date}", s.worklog)
 		r.Put("/worklog/{date}", s.saveWorklog)
-		r.Get("/work-calendar", func(w http.ResponseWriter, r *http.Request) { respond(w, s.Calendar) })
 	})
 	mh := mcp.NewStreamableHTTPHandler(func(r *http.Request) *mcp.Server {
 		return mcptransport.New(svc, security.Identity(r.Context()), logger, nil)
@@ -306,6 +304,7 @@ func (s *Server) dates(w http.ResponseWriter, r *http.Request) {
 	}
 	respond(w, map[string]any{"dates": out})
 }
+
 // operation 将查询参数、路径 ID、版本别名及幂等请求头转换为统一业务参数。
 // 这里只适配 HTTP 协议，具体权限和业务约束仍由 Service 校验。
 func (s *Server) operation(op string) http.HandlerFunc {

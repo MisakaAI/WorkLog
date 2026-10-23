@@ -85,19 +85,47 @@ test('拒绝非法星期、日期、倒序或重叠的放假区间和重复调�
   assert.throws(() => getCalendarDay('invalid', calendar), /无效日期/)
 })
 
-test('从后端独立读取工作日历配置', async t => {
-  globalThis.WORKLOG_CONFIG = { apiBaseUrl: '/api' }
+test('本地和后端模式均从前端静态 JSON 读取，忽略旧 localStorage 配置', async t => {
   t.after(() => { delete globalThis.WORKLOG_CONFIG })
-  t.mock.method(globalThis, 'fetch', async url => {
-    assert.equal(url, '/api/work-calendar')
+  t.mock.method(globalThis, 'fetch', async (url, options) => {
+    assert.equal(url, './work-calendar.json')
+    assert.equal(options.cache, 'no-store')
+    assert.equal(options.credentials, 'same-origin')
+    assert.ok(options.signal instanceof AbortSignal)
     return { ok: true, json: async () => config }
   })
-  assert.deepEqual(await getWorkCalendar(), config)
+  for (const apiBaseUrl of ['', 'https://backend.example.com/api']) {
+    globalThis.WORKLOG_CONFIG = { apiBaseUrl }
+    assert.deepEqual(await getWorkCalendar(), config)
+  }
+})
+
+test('发布日历与 2026 年参考数据一致', () => {
+  const published = JSON.parse(readFileSync(new URL('../public/work-calendar.json', import.meta.url), 'utf8'))
+  assert.deepEqual(parseWorkCalendar(published), config)
+})
+
+test('单休和清空节日可自定义，所有日期设为工作日可取消休息日区分', () => {
+  const singleRest = parseWorkCalendar({ workingWeekdays: [1, 2, 3, 4, 5, 6], holidays: [], adjustedWorkdays: [] })
+  assert.equal(getCalendarDay('2026-07-11', singleRest).type, 'workday')
+  assert.equal(getCalendarDay('2026-07-12', singleRest).type, 'restday')
+  assert.equal(getCalendarDay('2026-01-01', singleRest).type, 'workday')
+  const uniform = parseWorkCalendar({ ...singleRest, workingWeekdays: [0, 1, 2, 3, 4, 5, 6] })
+  assert.equal(getCalendarDay('2026-07-12', uniform).type, 'workday')
 })
 
 test('配置接口失败时抛出错误，供甘特图降级和重试', async t => {
   globalThis.WORKLOG_CONFIG = { apiBaseUrl: '/api' }
   t.after(() => { delete globalThis.WORKLOG_CONFIG })
   t.mock.method(globalThis, 'fetch', async () => ({ ok: false }))
-  await assert.rejects(getWorkCalendar(), /后端请求失败/)
+  await assert.rejects(getWorkCalendar(), /工作日历加载失败/)
+})
+
+test('静态日历网络错误、JSON 损坏和结构错误均交由界面降级与重试', async t => {
+  t.mock.method(globalThis, 'fetch', async () => { throw new Error('network') })
+  await assert.rejects(getWorkCalendar(), /network/)
+  globalThis.fetch = async () => ({ ok: true, json: async () => { throw new SyntaxError('invalid JSON') } })
+  await assert.rejects(getWorkCalendar(), /invalid JSON/)
+  globalThis.fetch = async () => ({ ok: true, json: async () => ({}) })
+  await assert.rejects(getWorkCalendar(), /配置格式/)
 })

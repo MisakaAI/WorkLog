@@ -36,6 +36,7 @@ func main() {
 		os.Exit(1)
 	}
 }
+
 // run 共用配置与数据库初始化流程，再按命令进入 HTTP、stdio 或数据维护模式。
 func run(logger *slog.Logger) error {
 	conf, args, err := parseArgs(os.Args[1:])
@@ -93,11 +94,7 @@ func run(logger *slog.Logger) error {
 		server := mcptransport.New(svc, id, logger, security.NewLimiter())
 		return server.Run(ctx, &mcp.StdioTransport{})
 	}
-	calendar, err := service.LoadCalendar(c.CalendarFile)
-	if err != nil {
-		return diagnostics.Wrap("load_calendar", err)
-	}
-	srv := rest.HTTPServer(c.Addr, rest.New(svc, c, calendar, logger))
+	srv := rest.HTTPServer(c.Addr, rest.New(svc, c, logger))
 	done := make(chan error, 1)
 	go func() { done <- srv.ListenAndServe() }()
 	logger.Info("server_started", "address", c.Addr, "database", c.Driver, "business_timezone", c.Timezone, "local_mode", c.Local, "mcp_destructive_enabled", c.MCPDestructive)

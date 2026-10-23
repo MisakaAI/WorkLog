@@ -24,7 +24,7 @@ func staticName(urlPath string) (string, bool) {
 		return "index.html", true
 	}
 	switch name {
-	case "index.html", "favicon.svg", "favicon.ico", "logo.png":
+	case "index.html", "favicon.svg", "favicon.ico", "logo.png", "work-calendar.json":
 		return name, true
 	}
 	if !strings.HasPrefix(name, "assets/") {

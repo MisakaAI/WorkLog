@@ -20,7 +20,7 @@ Vite 将 `/api` 代理到 `127.0.0.1:8080`。不要将开发服务器公开到�
 cmd/worklog/                 HTTP / stdio、迁移与 SQLite 备份恢复命令
 internal/config/             环境配置和私有令牌文件
 internal/domain/             模型、身份、公开错误和输入／富文本校验
-internal/service/            共用业务、事务、版本／幂等与日历
+internal/service/            共用业务、事务、版本／幂等
 internal/repository/         Repository 和事务接口
 internal/storage/            SQLite / PostgreSQL 与各自内嵌迁移
 internal/transport/rest/     HTTP、静态文件、CORS 和错误响应

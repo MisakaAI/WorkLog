@@ -1,7 +1,7 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import { readFileSync, readdirSync } from 'node:fs'
-import { getDashboard, saveDashboard, getWorkCalendar, emptyDashboard, emptyCalendar, DASHBOARD_KEY } from '../src/api/index.js'
+import { getDashboard, saveDashboard, emptyDashboard, DASHBOARD_KEY } from '../src/api/index.js'
 import { getBackendURL, requestJSON } from '../src/api/client.js'
 
 function setup(t) {
@@ -25,7 +25,6 @@ test('本地模式不调用 fetch，不加载旧示例缓存，保存后重新�
   t.mock.method(globalThis, 'fetch', () => { throw new Error('不应有网络请求') })
   const initial = await getDashboard()
   assert.deepEqual(initial, { ...emptyDashboard(), revision: 0 })
-  assert.deepEqual(await getWorkCalendar(), emptyCalendar())
   const saved = await saveDashboard({ ...initial, personalLabel: '自己的工作台' })
   assert.equal(saved.revision, 1)
   assert.deepEqual(await getDashboard(), saved)

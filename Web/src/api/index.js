@@ -4,7 +4,6 @@ import { getBackendURL, requestJSON } from './client.js'
 
 // 独立命名空间，不将旧版本自带的示例缓存带入正式数据。
 export const DASHBOARD_KEY = 'worklog.v2.dashboard'
-export const CALENDAR_KEY = 'worklog.v2.calendar'
 export const emptyDashboard = () => ({ projects: [], categories: [...tags], tasks: [], todos: [], personalLabel: '个人工作台' })
 export const emptyCalendar = () => ({ workingWeekdays: [1, 2, 3, 4, 5], holidays: [], adjustedWorkdays: [] })
 
@@ -34,7 +33,12 @@ export async function saveDashboard(snapshot) {
 }
 
 export async function getWorkCalendar() {
-  if (getBackendURL()) return parseWorkCalendar(await requestJSON('/work-calendar'))
-  const cached = localStorage.getItem(CALENDAR_KEY)
-  return cached === null ? emptyCalendar() : parseWorkCalendar(JSON.parse(cached))
+  // 两种模式均读取前端静态资源；相对路径兼容子目录部署，不使用 API 地址或浏览器缓存配置。
+  const response = await fetch('./work-calendar.json', {
+    cache: 'no-store',
+    credentials: 'same-origin',
+    signal: AbortSignal.timeout(15000),
+  })
+  if (!response.ok) throw new Error(`工作日历加载失败（HTTP ${response.status}）`)
+  return parseWorkCalendar(await response.json())
 }

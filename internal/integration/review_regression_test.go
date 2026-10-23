@@ -16,7 +16,6 @@ import (
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 	"worklog/internal/domain"
 	"worklog/internal/repository"
-	"worklog/internal/service"
 	"worklog/internal/transport/rest"
 )
 
@@ -78,7 +77,8 @@ func TestHTTPBudgetsAndStaticBoundary(t *testing.T) {
 	dir := t.TempDir()
 	must(t, os.MkdirAll(filepath.Join(dir, "assets"), 0700))
 	must(t, os.MkdirAll(filepath.Join(dir, "data"), 0700))
-	for name, contents := range map[string]string{"index.html": "<html>worklog</html>", "assets/app-hash.js": "console.log('app')", "data/worklog.db": "private database", "README.md": "private source"} {
+	calendarJSON := `{"workingWeekdays":[1,2,3,4,5],"holidays":[],"adjustedWorkdays":[]}`
+	for name, contents := range map[string]string{"index.html": "<html>worklog</html>", "assets/app-hash.js": "console.log('app')", "data/worklog.db": "private database", "README.md": "private source", "work-calendar.json": calendarJSON, "config.json": "private config"} {
 		must(t, os.WriteFile(filepath.Join(dir, name), []byte(contents), 0600))
 	}
 	outside := filepath.Join(t.TempDir(), "private.js")
@@ -89,9 +89,7 @@ func TestHTTPBudgetsAndStaticBoundary(t *testing.T) {
 	cfg.BasicUser = "human"
 	cfg.BasicPassword = "private-human-password"
 	cfg.StaticDir = dir
-	cal, e := service.LoadCalendar("")
-	must(t, e)
-	server := httptest.NewServer(rest.New(f.svc, cfg, cal, logger))
+	server := httptest.NewServer(rest.New(f.svc, cfg, logger))
 	defer server.Close()
 	f.server = server
 	// Invalid identities cannot consume the authenticated budget.
@@ -124,13 +122,27 @@ func TestHTTPBudgetsAndStaticBoundary(t *testing.T) {
 			t.Fatal(code)
 		}
 	}
-	for _, path := range []string{"/data/worklog.db", "/README.md", "/go.mod", "/assets/escape.js", "/assets/", "/.env"} {
+	for _, path := range []string{"/data/worklog.db", "/README.md", "/go.mod", "/assets/escape.js", "/assets/", "/.env", "/config.json"} {
 		code, _, _ := get(path)
 		if code != 404 {
 			t.Fatal(path, code)
 		}
 	}
-	code, h, _ := get("/assets/app-hash.js")
+	code, _, _ := req(t, f, "GET", "/work-calendar.json", nil, nil)
+	if code != 401 {
+		t.Fatal("calendar must require authentication", code)
+	}
+	code, h, calendarBody := get("/work-calendar.json")
+	if code != 200 || calendarBody != calendarJSON || !strings.Contains(h.Get("Content-Type"), "application/json") || !strings.Contains(h.Get("Cache-Control"), "no-store") {
+		t.Fatal(code, h, calendarBody)
+	}
+	updatedCalendar := `{"workingWeekdays":[1,2,3,4,5,6],"holidays":[],"adjustedWorkdays":[]}`
+	must(t, os.WriteFile(filepath.Join(dir, "work-calendar.json"), []byte(updatedCalendar), 0600))
+	code, _, calendarBody = get("/work-calendar.json")
+	if code != 200 || calendarBody != updatedCalendar {
+		t.Fatal("calendar replacement must not require restart", code, calendarBody)
+	}
+	code, h, _ = get("/assets/app-hash.js")
 	if code != 200 || !strings.Contains(h.Get("Cache-Control"), "private, max-age=") {
 		t.Fatal(code, h)
 	}

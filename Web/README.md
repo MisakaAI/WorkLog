@@ -56,7 +56,6 @@ python3 ico.py
 | --- | --- |
 | `worklog.v2.dashboard` | 项目及顺序、分类及顺序、任务、待办、顶部工作台文字、工作台版本 |
 | `worklog.v2.entry.YYYY-MM-DD` | 指定日期的 Tiptap JSON 日志、更新时间及版本 |
-| `worklog.v2.calendar` | 可选的工作日历配置；未设置则周一至周五工作，无节假日和调休预置 |
 | `worklog-theme` | 手动选择的主题 |
 
 数据只属于该浏览器、该站点来源（协议／域名／端口），不提供跨设备同步。清理站点数据、隐私模式退出或浏览器存储故障可能导致数据不可用；  
@@ -65,8 +64,8 @@ python3 ico.py
 本次使用新的 `worklog.v2.*` 命名空间，**不再读取旧版 `worklog-dashboard` 和 `worklog.entry.*`**，避免旧示例缓存再次出现。  
 旧键不会被自动删除（其中可能包含用户记录），也不自动导入新存储或上传后端。如需保留旧数据，先手动备份并按新结构校验转换。
 
-工作日历沿用 `src/workCalendar.js` 的结构，可通过浏览器控制台写入 `worklog.v2.calendar` 后刷新。  
-没有页面配置入口，后端配置格式见[工作日历 API 说明](docs/API工作日历.md)。
+工作日历在两种模式下都读取前端 `public/work-calendar.json`（构建后为 `dist/work-calendar.json`），默认包含 2026 年节假日和调休，不再读取 `worklog.v2.calendar`。
+没有页面配置入口；自定义单双休、节假日或取消节日标记见[工作日历自定义](../docs/WORK_CALENDAR.md)。
 
 ### 2. 后端模式
 
@@ -105,12 +104,11 @@ VITE_API_BASE_URL=https://backend.example.com/api
 | GET | `/today` | 读取今天日志 |
 | GET / PUT | `/worklog/:date` | 读取／按版本保存指定日期日志 |
 | GET | `/worklog/dates` | 返回全部有内容日志的日期 `{ dates: [] }` |
-| GET | `/work-calendar` | 读取完整工作日历配置 |
 
 请求直接收发 JSON，不使用 `{ data: ... }` 包装。日志保存使用标准 `PUT`，不再使用 `PUSH`。  
 后端工作台完整快照容量预算为 8 MiB（按服务端 JSON 编码计），所有写入口统一检查；超限会返回错误并保留原数据。
 
-接口字段和冲突处理见 [HTTP API 说明](docs/API说明.md)及其[工作台](docs/API工作台.md)、[工作日志](docs/API工作日志.md)、[工作日历](docs/API工作日历.md)文档；后端额外提供共享同一数据的细粒度 REST / MCP 接口，但 Vue 当前仍使用完整快照保存。
+接口字段和冲突处理见 [HTTP API 说明](docs/API说明.md)及其[工作台](docs/API工作台.md)、[工作日志](docs/API工作日志.md)文档；后端额外提供共享同一数据的细粒度 REST / MCP 接口，但 Vue 当前仍使用完整快照保存。
 
 客户端请求超时为 15 秒，不自动重试写操作。  
 使用同源凭证；跨域后端需要正确配置 CORS，当前不支持跨域 Cookie 登录或页面填写 Token，因此浏览器工作台正式推荐同源代理及部署层认证；  
@@ -135,7 +133,7 @@ VITE_API_BASE_URL=https://backend.example.com/api
 ## 代码导航与 review
 
 - `src/api/client.js`：配置选择、统一 HTTP、错误及超时处理。
-- `src/api/index.js`：工作台与日历的本地／后端适配。
+- `src/api/index.js`：工作台的本地／后端适配及静态日历 JSON 加载。
 - `src/api/worklog.js`：日志读写、显式版本参数及日期标记，不依赖静态文件。
 - `src/dashboard.js`、`src/workCalendar.js`：结构校验、筛选、日期及关联变更规则。
 - `src/worklogSaving.js`：日期正文与基准版本绑定、保存去重及保存期间继续编辑。

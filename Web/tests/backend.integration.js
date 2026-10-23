@@ -4,7 +4,7 @@ import assert from 'node:assert/strict'
 import { randomUUID } from 'node:crypto'
 import { JSDOM } from 'jsdom'
 import { parseWorklogHTML } from '../src/worklogEditor.js'
-import { getDashboard, saveDashboard, getWorkCalendar } from '../src/api/index.js'
+import { getDashboard, saveDashboard } from '../src/api/index.js'
 import { getTodayWorklog, getWorklog, saveWorklog, getWorklogDates } from '../src/api/worklog.js'
 import { requestJSON } from '../src/api/client.js'
 
@@ -16,7 +16,7 @@ Object.defineProperty(globalThis, 'localStorage', { configurable: true, value: {
   setItem() { throw new Error('Remote mode must not write local storage') },
 } })
 
-test('real Vue API adapters: snapshot, granular concurrent write, log format/version/markers and calendar', async () => {
+test('real Vue API adapters: snapshot, granular concurrent write, log format/version/markers', async () => {
   const initial = await getDashboard()
   assert.equal(initial.tasks.length, 0, 'Use a fresh database, not personal data')
   const project = { id: randomUUID(), name: '真实接入项目' }
@@ -31,7 +31,6 @@ test('real Vue API adapters: snapshot, granular concurrent write, log format/ver
   assert.equal(latest.tasks.length, 2, 'Conflict must not overwrite server changes')
   const migrated = await saveDashboard({ ...latest, projects: [], tasks: latest.tasks.map(item => ({ ...item, projectId: '' })) })
   assert.ok(migrated.tasks.every(item => item.projectId === ''))
-  assert.deepEqual((await getWorkCalendar()).workingWeekdays, [1, 2, 3, 4, 5])
   const today = await getTodayWorklog()
   assert.match(today.date, /^\d{4}-\d{2}-\d{2}$/)
   const date = '2098-12-30'

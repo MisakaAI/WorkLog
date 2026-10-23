@@ -7,7 +7,6 @@ import (
 	"testing"
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
-	"worklog/internal/service"
 	"worklog/internal/transport/rest"
 )
 
@@ -29,9 +28,7 @@ func TestRemoteAuthAndReverseProxyMCP(t *testing.T) {
 	c.BasicPassword = strings.Repeat("private", 4)
 	c.AllowedHosts = append(c.AllowedHosts, "worklog.example.com")
 	c.AllowedOrigins = append(c.AllowedOrigins, "https://worklog.example.com")
-	calendar, e := service.LoadCalendar("")
-	must(t, e)
-	server := httptest.NewServer(rest.New(f.svc, c, calendar, logger))
+	server := httptest.NewServer(rest.New(f.svc, c, logger))
 	defer server.Close()
 	old := f.server
 	f.server = server

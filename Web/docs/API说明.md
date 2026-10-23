@@ -14,7 +14,6 @@ API 基础 URL 应包含前缀，例如 `/api` 或 `https://backend.example.com/
 | GET | `/today` | 读取服务端业务时区中的今天日志 |
 | GET | `/worklog/dates` | 查询有内容的日志日期；也支持可选日期范围 |
 | GET / PUT | `/worklog/{date}` | 读取／保存指定日期日志 |
-| GET | `/work-calendar` | 读取完整工作日历配置 |
 
 Vue 前端不调用细粒度资源接口。后端另外实现的项目、分类、任务、待办 REST 扩展及 MCP 工具，
 见[REST API](../../docs/REST_API.md)及 [MCP 客户端指南](../../docs/MCP.md)。
@@ -54,4 +53,4 @@ Vue 前端不调用细粒度资源接口。后端另外实现的项目、分类�
 
 - [工作台快照](API工作台.md)
 - [工作日志](API工作日志.md)
-- [工作日历](API工作日历.md)
+- [工作日历静态 JSON（不属于后端 API）](API工作日历.md)

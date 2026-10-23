@@ -57,4 +57,5 @@ go build -o bin/worklog ./cmd/worklog
 - [MCP 客户端指南](docs/MCP.md)：工具列表、Codex、HTTP 与 stdio 配置。
 - [备份与恢复](docs/OPERATIONS.md)：SQLite 和 PostgreSQL 数据维护。
 - [开发与测试](docs/DEVELOPMENT.md)：前端热更新、测试命令、代码结构与存储并发约定。
+- [工作日历自定义](docs/WORK_CALENDAR.md)：通过 JSON 设置工作日、节假日、调休、单休或取消节日标记。
 - [前端说明](Web/README.md)：独立前端运行与配置。

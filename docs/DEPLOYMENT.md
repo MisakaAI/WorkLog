@@ -66,7 +66,6 @@ Go 不会自动读取 `.env`；本机 shell 需显式载入，Docker Compose 则
 | `WORKLOG_USER_ID` | `owner`，仅由可信服务端设置 |
 | `WORKLOG_TIMEZONE` | `Asia/Shanghai`，程序内嵌 tzdata |
 | `WORKLOG_STATIC_DIR` | `Web/dist`；空串关闭静态服务 |
-| `WORKLOG_CALENDAR_FILE` | 可选日历 JSON，启动时完整校验，变更需重启 |
 | `WORKLOG_TOKEN_FILE` | `./data/mcp-token`，本地未设置写令牌时生成／读取 |
 | `WORKLOG_WRITE_TOKEN` | 至少 32 字节的独立 Bearer 写令牌 |
 | `WORKLOG_READ_TOKEN` | 可选、与写令牌不同的至少 32 字节只读令牌 |
@@ -107,7 +106,8 @@ docker compose logs --tail=100 worklog
 - 容器以 UID 10001 非 root 运行；改用 bind mount 时，预先创建目录并授予该 UID 读写权限。
 - 主机只发布 `127.0.0.1:8080`；容器内监听 `0.0.0.0:8080`，因此启动时强制要求凭证。
 - 镜像包含前端与纯 Go 可执行文件，不包含 Node / Go 编译器。
-- Compose 只传递配置文件中显式列出的环境变量。要使用自定义日历或其他额外选项，需自行增加 environment 和相应 volume。
+- Compose 只传递配置文件中显式列出的环境变量；其他额外选项需自行增加 environment 和相应 volume。
+- 日历固定使用前端 `work-calendar.json`，无需后端配置或环境变量。可在构建前编辑 `Web/public/work-calendar.json`，或替换发布目录中的同名文件；Docker 也可通过只读挂载替换，详见[工作日历自定义](WORK_CALENDAR.md)。
 
 PostgreSQL 版本：
 

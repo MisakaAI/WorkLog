@@ -21,7 +21,7 @@ try {
     WORKLOG_WRITE_TOKEN: randomBytes(32).toString('hex'), WORKLOG_READ_TOKEN: '',
     WORKLOG_BASIC_PASSWORD: '', WORKLOG_USER_ID: 'smoke', WORKLOG_TIMEZONE: 'Asia/Shanghai',
     WORKLOG_ALLOWED_HOSTS: 'localhost,127.0.0.1', WORKLOG_ALLOWED_ORIGINS: '',
-    WORKLOG_CALENDAR_FILE: '', WORKLOG_STATIC_DIR: resolve(root, 'Web/dist'),
+    WORKLOG_STATIC_DIR: resolve(root, 'Web/dist'),
     WORKLOG_MCP_ALLOW_DESTRUCTIVE: 'false',
   } })
   for (const signal of ['SIGINT', 'SIGTERM']) process.on(signal, () => child.kill('SIGTERM'))

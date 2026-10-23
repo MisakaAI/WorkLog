@@ -46,7 +46,6 @@ Vue 工作台使用完整快照 API；细粒度资源接口供其他客户端集
 | GET | `/api/today` | 业务时区中的今天日志 |
 | GET | `/api/worklog/dates` | 有内容的日志日期 |
 | GET / PUT | `/api/worklog/{date}` | 按日期读取／保存日志 |
-| GET | `/api/work-calendar` | 完整日历，只读 |
 | GET | `/healthz` | 无认证健康检查，仍校验 Host |
 
 完整字段与校验规则沿用前端协议参考：
@@ -54,9 +53,9 @@ Vue 工作台使用完整快照 API；细粒度资源接口供其他客户端集
 - [核心 HTTP API 与错误处理](../Web/docs/API说明.md)
 - [工作台快照](../Web/docs/API工作台.md)
 - [工作日志与富文本结构](../Web/docs/API工作日志.md)
-- [工作日历与配置文件](../Web/docs/API工作日历.md)
+- [工作日历静态 JSON 与自定义](WORK_CALENDAR.md)
 
-日志和日历不属于 dashboard 快照。日历默认无节假日／调休，设置 `WORKLOG_CALENDAR_FILE` 后重启加载，没有日历写 API。
+日志和日历不属于 dashboard 快照。日历不再通过 REST API 提供：前端在本地和后端模式下都读取同目录的 `work-calendar.json`，默认包含 2026 年节假日／调休，没有日历写 API。
 
 ## 项目集合
 
