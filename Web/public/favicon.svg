@@ -1,0 +1,53 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="256" height="256" viewBox="0 0 256 256" fill="none">
+  <title>Worklog · 手账</title>
+  <defs>
+    <linearGradient id="surface" x1="24" y1="16" x2="232" y2="240" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#fafbfd"/>
+      <stop offset="1" stop-color="#e5e9f0"/>
+    </linearGradient>
+    <linearGradient id="edge" x1="28" y1="20" x2="224" y2="236" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#ffffff"/>
+      <stop offset="1" stop-color="#cdd3df" stop-opacity="0.6"/>
+    </linearGradient>
+    <linearGradient id="cover" x1="56" y1="48" x2="196" y2="210" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#9684b6"/>
+      <stop offset="1" stop-color="#69558f"/>
+    </linearGradient>
+    <linearGradient id="paper" x1="88" y1="48" x2="186" y2="192" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#ffffff"/>
+      <stop offset="1" stop-color="#eeeef5"/>
+    </linearGradient>
+    <linearGradient id="ribbon" x1="149" y1="48" x2="176" y2="118" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#9d89be"/>
+      <stop offset="1" stop-color="#705b9f"/>
+    </linearGradient>
+    <filter id="raised" x="0" y="0" width="256" height="256" filterUnits="userSpaceOnUse" color-interpolation-filters="sRGB">
+      <feDropShadow dx="5" dy="6" stdDeviation="5" flood-color="#cdd3df" flood-opacity="0.65"/>
+      <feDropShadow dx="-3" dy="-3" stdDeviation="3" flood-color="#ffffff" flood-opacity="0.9"/>
+    </filter>
+    <filter id="book-shadow" x="28" y="24" width="200" height="216" filterUnits="userSpaceOnUse" color-interpolation-filters="sRGB">
+      <feDropShadow dx="7" dy="10" stdDeviation="8" flood-color="#8d86a2" flood-opacity="0.28"/>
+      <feDropShadow dx="-3" dy="-4" stdDeviation="4" flood-color="#ffffff" flood-opacity="0.85"/>
+    </filter>
+    <filter id="ribbon-shadow" x="136" y="40" width="56" height="92" filterUnits="userSpaceOnUse" color-interpolation-filters="sRGB">
+      <feDropShadow dx="2" dy="3" stdDeviation="2" flood-color="#5b497b" flood-opacity="0.22"/>
+    </filter>
+  </defs>
+  <rect x="12" y="12" width="232" height="232" rx="56" fill="url(#surface)" stroke="url(#edge)" stroke-width="2" filter="url(#raised)"/>
+  <g filter="url(#book-shadow)">
+    <!-- Rounded cloth cover and the exposed lower edge of the page block. -->
+    <rect x="57" y="45" width="140" height="166" rx="19" fill="url(#cover)"/>
+    <path d="M79 56H181C185.418 56 189 59.582 189 64V194C189 198.418 185.418 202 181 202H79C72.373 202 67 196.627 67 190V68C67 61.373 72.373 56 79 56Z" fill="#d9d5e4"/>
+    <path d="M80 195H180" stroke="#fdfcff" stroke-width="3" stroke-linecap="round"/>
+    <!-- A broad binding, rather than tiny rings, stays legible at favicon sizes. -->
+    <path d="M81 45H181C189.837 45 197 52.163 197 61V181C197 187.627 191.627 193 185 193H81V45Z" fill="url(#paper)"/>
+    <path d="M82 51V187" stroke="#ffffff" stroke-opacity="0.8" stroke-width="2"/>
+    <path d="M74 59V181" stroke="#5e4a82" stroke-opacity="0.25" stroke-width="2" stroke-linecap="round"/>
+    <!-- One swallowtail bookmark is the primary visual accent. -->
+    <path d="M147 46H177V116L162 105L147 116V46Z" fill="url(#ribbon)" filter="url(#ribbon-shadow)"/>
+    <path d="M150 49H174" stroke="#c7b8de" stroke-width="2" stroke-linecap="round"/>
+    <!-- Only two quiet rules: no lettering or miniature UI. -->
+    <path d="M104 144H166" stroke="#a49ab8" stroke-width="8" stroke-linecap="round"/>
+    <path d="M104 164H145" stroke="#c4bdcf" stroke-width="8" stroke-linecap="round"/>
+  </g>
+</svg>

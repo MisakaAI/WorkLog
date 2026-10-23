@@ -1,0 +1,19 @@
+{
+  "projects": [
+    { "id": "worklog", "name": "Worklog" },
+    { "id": "components", "name": "基础组件" }
+  ],
+  "tasks": [
+    { "id": 1, "projectId": "worklog", "title": "整理需求与想法", "description": "记录使用场景，确定下一步要做的事", "status": "planned", "tag": "产品", "priority": "高", "startDate": "", "date": "", "color": "white" },
+    { "id": 2, "projectId": "components", "title": "整理基础组件", "description": "统一常用的颜色、字体与组件", "status": "planned", "tag": "设计", "priority": "低", "startDate": "", "date": "", "color": "blue" },
+    { "id": 3, "projectId": "worklog", "title": "简化工作台界面", "description": "保留常用功能，减少不必要的装饰", "status": "progress", "tag": "设计", "priority": "极高", "startDate": "", "date": "", "color": "red" },
+    { "id": 4, "projectId": "worklog", "title": "完善任务交互", "description": "支持拖动卡片和编辑任务状态", "status": "progress", "tag": "开发", "priority": "中", "startDate": "", "date": "", "color": "orange" },
+    { "id": 5, "projectId": "components", "title": "搭建开发环境", "description": "完成工程初始化与开发配置", "status": "done", "tag": "开发", "priority": "中", "startDate": "", "date": "", "color": "green" },
+    { "id": 6, "projectId": "worklog", "title": "梳理页面结构", "description": "确定任务看板与个人待办两个主要区域", "status": "done", "tag": "产品", "priority": "中", "startDate": "", "date": "", "color": "white" }
+  ],
+  "todos": [
+    { "id": 1, "title": "整理本周计划", "done": true },
+    { "id": 2, "title": "记录待改进的问题", "done": false },
+    { "id": 3, "title": "更新工作记录", "done": false }
+  ]
+}

@@ -1,0 +1,191 @@
+@import 'element-plus/theme-chalk/dark/css-vars.css';
+
+:root {
+  color-scheme: light;
+  --page: #edf0f5;
+  --surface: #fafbfd;
+  --surface-soft: #edf0f5;
+  --surface-hover: #efedf5;
+  --text-main: #30333e;
+  --text-secondary: #595e6d;
+  --text-muted: #626878;
+  --border: #dedfe7;
+  --border-soft: #e9e9ef;
+  --accent: #705b9f;
+  --accent-bg: #eeeaf6;
+  /* 代码选区沿用主色的淡染，但比徽标底色更明显，以免淹没在编辑区背景中。 */
+  --editor-selection-bg: #c8c3db;
+  --editor-selection-bg-inactive: #dedbe9;
+  --editor-selection-fg: #30333e;
+  --editor-selection-highlight-bg: #dedbe9;
+  --accent-solid: #69558f;
+  --accent-solid-hover: #59457e;
+  --on-accent: #ffffff;
+  --blue-fg: #48658a;
+  --blue-bg: #eaf0f7;
+  --green-fg: #466e59;
+  --green-bg: #e9f1ec;
+  --orange-fg: #87613b;
+  --orange-bg: #f8eee2;
+  --red-fg: #8d4848;
+  --red-bg: #f7e8e7;
+  --card-red: #fbefee;
+  --card-orange: #fbf2e7;
+  --card-blue: #edf3fa;
+  --card-green: #edf5ef;
+  --shadow-panel: 8px 8px 24px #d7dce580, -6px -6px 20px #ffffffb3;
+  --shadow-raised: 3px 3px 8px #cdd3df80, -3px -3px 8px #ffffff;
+  --shadow-inset: inset 2px 2px 5px #cbd2df66, inset -2px -2px 5px #ffffffcc;
+  --shadow-card: 0 2px 5px #30364708, 0 6px 14px #30364705;
+  --shadow-card-hover: 0 3px 6px #3036470c, 0 8px 18px #3036470a;
+  --shadow-overlay: 0 16px 60px #30364726, 0 2px 8px #3036470d;
+  --edge-light: #ffffff;
+  --el-mask-color: rgb(36 40 54 / 38%);
+}
+
+:root.dark {
+  color-scheme: dark;
+  --page: #171a21;
+  --surface: #222630;
+  --surface-soft: #1c2029;
+  --surface-hover: #303340;
+  --text-main: #e3e5ed;
+  --text-secondary: #bfc4d1;
+  --text-muted: #a3aabd;
+  --border: #3b404e;
+  --border-soft: #323744;
+  --accent: #bba7df;
+  --accent-bg: #353044;
+  /* 暗色下选区改用浅底 + 深字，避免近白文字压在深紫底上难以辨认。 */
+  --editor-selection-bg: #b6abcc;
+  --editor-selection-bg-inactive: #a9a2b8;
+  --editor-selection-fg: #1c2029;
+  --editor-selection-highlight-bg: #3d3750;
+  --accent-solid: #a48bbf;
+  --accent-solid-hover: #b59ccc;
+  --on-accent: #191420;
+  --blue-fg: #b0c5e0;
+  --blue-bg: #293749;
+  --green-fg: #accdb8;
+  --green-bg: #2a3b33;
+  --orange-fg: #d8bd99;
+  --orange-bg: #40362b;
+  --red-fg: #e2b2af;
+  --red-bg: #452d32;
+  --card-red: #35282d;
+  --card-orange: #383126;
+  --card-blue: #273345;
+  --card-green: #263930;
+  --shadow-panel: 8px 8px 24px #0d101866, -4px -4px 16px #30354233;
+  --shadow-raised: 3px 3px 8px #0b0e1666, -2px -2px 6px #3a405233;
+  --shadow-inset: inset 2px 2px 5px #0c0f1859, inset -2px -2px 5px #3a405226;
+  --shadow-card: 0 2px 8px #080b1326;
+  --shadow-card-hover: 0 3px 6px #080b1333, 0 8px 18px #080b1326;
+  --shadow-overlay: 0 16px 60px #05070c80, 0 2px 8px #05070c40;
+  --edge-light: #393e4b;
+  --el-mask-color: rgb(0 0 0 / 65%);
+}
+
+/* 切换时关闭组件自身的颜色插值，由整页快照统一过渡；旧浏览器直接原子切换。 */
+:root[data-theme-changing],
+:root[data-theme-changing] *,
+:root[data-theme-changing] *::before,
+:root[data-theme-changing] *::after {
+  transition: none !important;
+}
+
+::view-transition-old(root) {
+  animation: none;
+  mix-blend-mode: normal;
+}
+
+::view-transition-new(root) {
+  animation: theme-fade-in 180ms ease-out both;
+  mix-blend-mode: normal;
+}
+
+@keyframes theme-fade-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  ::view-transition-old(root),
+  ::view-transition-new(root) { animation: none; }
+}
+
+/* 原生控件和 Element Plus 浮层共用语义色，避免按组件重复覆盖。 */
+:root, :root.dark {
+  font-synthesis: none;
+  color: var(--text-main);
+  background: var(--page);
+  --radius-panel: 20px;
+  --radius-card: 12px;
+  --radius-control: 9px;
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-5: 24px;
+  --space-6: 32px;
+  --motion-fast: 160ms ease;
+  /* 以柔和色晕和原有凹面表现焦点，不再叠加粗实线。 */
+  --focus-color: var(--accent);
+  --focus-surface: color-mix(in srgb, var(--focus-color) 6%, var(--surface-soft));
+  --shadow-focus-glow: 0 0 0 3px color-mix(in srgb, var(--focus-color) 10%, transparent), 0 0 14px color-mix(in srgb, var(--focus-color) 16%, transparent);
+  --shadow-focus: var(--shadow-inset), inset 0 0 0 1px color-mix(in srgb, var(--focus-color) 45%, var(--border-soft)), var(--shadow-focus-glow);
+  --shadow-focus-visible: 0 0 0 1px color-mix(in srgb, var(--focus-color) 65%, var(--border)), var(--shadow-focus-glow);
+  --el-transition-duration: 0.16s;
+  --el-transition-duration-fast: 0.12s;
+  --el-color-primary: var(--accent);
+  --el-color-primary-light-3: color-mix(in srgb, var(--accent) 70%, var(--surface));
+  --el-color-primary-light-5: color-mix(in srgb, var(--accent) 50%, var(--surface));
+  --el-color-primary-light-7: color-mix(in srgb, var(--accent) 30%, var(--surface));
+  --el-color-primary-light-8: color-mix(in srgb, var(--accent) 20%, var(--surface));
+  --el-color-primary-dark-2: var(--accent-solid-hover);
+  --el-color-success: var(--green-fg);
+  --el-color-success-light-9: var(--green-bg);
+  --el-color-warning: var(--orange-fg);
+  --el-color-warning-light-9: var(--orange-bg);
+  --el-color-danger: var(--red-fg);
+  --el-color-danger-light-9: var(--red-bg);
+  --el-color-info: var(--text-secondary);
+  --el-color-info-light-9: var(--surface-soft);
+  --el-text-color-primary: var(--text-main);
+  --el-text-color-regular: var(--text-secondary);
+  --el-text-color-secondary: var(--text-muted);
+  --el-text-color-placeholder: var(--text-muted);
+  --el-bg-color: var(--surface);
+  --el-bg-color-page: var(--page);
+  --el-bg-color-overlay: var(--surface);
+  --el-fill-color-blank: var(--surface);
+  --el-fill-color: var(--surface-soft);
+  --el-fill-color-light: var(--surface-soft);
+  --el-fill-color-lighter: var(--surface-soft);
+  --el-fill-color-dark: var(--surface-hover);
+  --el-fill-color-darker: var(--border);
+  --el-fill-color-extra-light: var(--surface);
+  --el-disabled-bg-color: var(--surface-soft);
+  --el-disabled-text-color: var(--text-muted);
+  --el-disabled-border-color: var(--border-soft);
+  --el-border-color: var(--border);
+  --el-border-color-light: var(--border-soft);
+  --el-border-color-lighter: var(--border-soft);
+  --el-border-color-extra-light: var(--border-soft);
+  --el-box-shadow: var(--shadow-overlay);
+  --el-box-shadow-light: var(--shadow-overlay);
+  --el-box-shadow-lighter: var(--shadow-card);
+  --el-font-family: var(--font-sans);
+  --el-font-size-extra-small: var(--font-size-xs);
+  --el-font-size-small: var(--font-size-sm);
+  --el-font-size-base: var(--font-size-base);
+  --el-font-size-medium: var(--font-size-lg);
+  --el-font-size-large: var(--font-size-xl);
+  --el-font-size-extra-large: var(--font-size-2xl);
+  --el-font-weight-primary: var(--font-weight-medium);
+  --el-font-line-height-primary: calc(var(--font-size-base) * var(--line-height-body));
+  --el-color-primary-light-9: var(--accent-bg);
+  --el-border-radius-base: var(--radius-control);
+  --el-border-radius-small: 6px;
+  --el-component-size: 36px;
+}

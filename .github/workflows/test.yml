@@ -1,0 +1,62 @@
+name: Tests
+on: [push, pull_request]
+permissions:
+  contents: read
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:18-alpine
+        env:
+          POSTGRES_USER: worklog_test
+          POSTGRES_PASSWORD: test_only_password
+          POSTGRES_DB: worklog_test
+        ports: ['55432:5432']
+        options: >-
+          --health-cmd pg_isready --health-interval 5s
+          --health-timeout 5s --health-retries 12
+    env:
+      WORKLOG_TEST_POSTGRES_DSN: postgres://worklog_test:test_only_password@127.0.0.1:55432/worklog_test?sslmode=disable
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: npm
+          cache-dependency-path: Web/package-lock.json
+      - run: go vet ./...
+      - run: go test -race ./...
+      - run: npm ci
+        working-directory: Web
+      - run: npm test
+        working-directory: Web
+      - run: npm run build
+        working-directory: Web
+      - run: npx playwright install --with-deps chromium webkit
+        working-directory: Web
+      - run: npm run test:e2e
+        working-directory: Web
+        env:
+          WORKLOG_TEST_WEBKIT: '1'
+      - name: Real backend adapter integration
+        working-directory: Web
+        run: |
+          node tests/start-backend.js > /tmp/worklog-adapter.log 2>&1 &
+          server=$!
+          trap 'kill "$server"; wait "$server" || true' EXIT
+          ready=false
+          for i in $(seq 1 90); do
+            if curl --fail --silent http://127.0.0.1:18080/healthz >/dev/null; then ready=true; break; fi
+            sleep 1
+          done
+          if [ "$ready" != true ]; then cat /tmp/worklog-adapter.log; exit 1; fi
+          WORKLOG_TEST_API_URL=http://127.0.0.1:18080/api npm run test:backend
+      - uses: actions/upload-artifact@v4
+        if: failure()
+        with:
+          name: browser-traces
+          path: Web/test-results/

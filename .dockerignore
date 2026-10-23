@@ -1,0 +1,15 @@
+.git
+.env
+.env.*
+!.env.example
+data
+backups
+bin
+*.db
+*.db-wal
+*.db-shm
+Web/node_modules
+Web/dist
+Web/test-results
+Web/playwright-report
+Web/.env*

@@ -1,0 +1,722 @@
+[
+  {
+    "color": "aliceblue",
+    "valid": true
+  },
+  {
+    "color": "antiquewhite",
+    "valid": true
+  },
+  {
+    "color": "aqua",
+    "valid": true
+  },
+  {
+    "color": "aquamarine",
+    "valid": true
+  },
+  {
+    "color": "azure",
+    "valid": true
+  },
+  {
+    "color": "beige",
+    "valid": true
+  },
+  {
+    "color": "bisque",
+    "valid": true
+  },
+  {
+    "color": "black",
+    "valid": true
+  },
+  {
+    "color": "blanchedalmond",
+    "valid": true
+  },
+  {
+    "color": "blue",
+    "valid": true
+  },
+  {
+    "color": "blueviolet",
+    "valid": true
+  },
+  {
+    "color": "brown",
+    "valid": true
+  },
+  {
+    "color": "burlywood",
+    "valid": true
+  },
+  {
+    "color": "cadetblue",
+    "valid": true
+  },
+  {
+    "color": "chartreuse",
+    "valid": true
+  },
+  {
+    "color": "chocolate",
+    "valid": true
+  },
+  {
+    "color": "coral",
+    "valid": true
+  },
+  {
+    "color": "cornflowerblue",
+    "valid": true
+  },
+  {
+    "color": "cornsilk",
+    "valid": true
+  },
+  {
+    "color": "crimson",
+    "valid": true
+  },
+  {
+    "color": "cyan",
+    "valid": true
+  },
+  {
+    "color": "darkblue",
+    "valid": true
+  },
+  {
+    "color": "darkcyan",
+    "valid": true
+  },
+  {
+    "color": "darkgoldenrod",
+    "valid": true
+  },
+  {
+    "color": "darkgray",
+    "valid": true
+  },
+  {
+    "color": "darkgrey",
+    "valid": true
+  },
+  {
+    "color": "darkgreen",
+    "valid": true
+  },
+  {
+    "color": "darkkhaki",
+    "valid": true
+  },
+  {
+    "color": "darkmagenta",
+    "valid": true
+  },
+  {
+    "color": "darkolivegreen",
+    "valid": true
+  },
+  {
+    "color": "darkorange",
+    "valid": true
+  },
+  {
+    "color": "darkorchid",
+    "valid": true
+  },
+  {
+    "color": "darkred",
+    "valid": true
+  },
+  {
+    "color": "darksalmon",
+    "valid": true
+  },
+  {
+    "color": "darkseagreen",
+    "valid": true
+  },
+  {
+    "color": "darkslateblue",
+    "valid": true
+  },
+  {
+    "color": "darkslategray",
+    "valid": true
+  },
+  {
+    "color": "darkslategrey",
+    "valid": true
+  },
+  {
+    "color": "darkturquoise",
+    "valid": true
+  },
+  {
+    "color": "darkviolet",
+    "valid": true
+  },
+  {
+    "color": "deeppink",
+    "valid": true
+  },
+  {
+    "color": "deepskyblue",
+    "valid": true
+  },
+  {
+    "color": "dimgray",
+    "valid": true
+  },
+  {
+    "color": "dimgrey",
+    "valid": true
+  },
+  {
+    "color": "dodgerblue",
+    "valid": true
+  },
+  {
+    "color": "firebrick",
+    "valid": true
+  },
+  {
+    "color": "floralwhite",
+    "valid": true
+  },
+  {
+    "color": "forestgreen",
+    "valid": true
+  },
+  {
+    "color": "fuchsia",
+    "valid": true
+  },
+  {
+    "color": "gainsboro",
+    "valid": true
+  },
+  {
+    "color": "ghostwhite",
+    "valid": true
+  },
+  {
+    "color": "gold",
+    "valid": true
+  },
+  {
+    "color": "goldenrod",
+    "valid": true
+  },
+  {
+    "color": "gray",
+    "valid": true
+  },
+  {
+    "color": "grey",
+    "valid": true
+  },
+  {
+    "color": "green",
+    "valid": true
+  },
+  {
+    "color": "greenyellow",
+    "valid": true
+  },
+  {
+    "color": "honeydew",
+    "valid": true
+  },
+  {
+    "color": "hotpink",
+    "valid": true
+  },
+  {
+    "color": "indianred",
+    "valid": true
+  },
+  {
+    "color": "indigo",
+    "valid": true
+  },
+  {
+    "color": "ivory",
+    "valid": true
+  },
+  {
+    "color": "khaki",
+    "valid": true
+  },
+  {
+    "color": "lavender",
+    "valid": true
+  },
+  {
+    "color": "lavenderblush",
+    "valid": true
+  },
+  {
+    "color": "lawngreen",
+    "valid": true
+  },
+  {
+    "color": "lemonchiffon",
+    "valid": true
+  },
+  {
+    "color": "lightblue",
+    "valid": true
+  },
+  {
+    "color": "lightcoral",
+    "valid": true
+  },
+  {
+    "color": "lightcyan",
+    "valid": true
+  },
+  {
+    "color": "lightgoldenrodyellow",
+    "valid": true
+  },
+  {
+    "color": "lightgray",
+    "valid": true
+  },
+  {
+    "color": "lightgrey",
+    "valid": true
+  },
+  {
+    "color": "lightgreen",
+    "valid": true
+  },
+  {
+    "color": "lightpink",
+    "valid": true
+  },
+  {
+    "color": "lightsalmon",
+    "valid": true
+  },
+  {
+    "color": "lightseagreen",
+    "valid": true
+  },
+  {
+    "color": "lightskyblue",
+    "valid": true
+  },
+  {
+    "color": "lightslategray",
+    "valid": true
+  },
+  {
+    "color": "lightslategrey",
+    "valid": true
+  },
+  {
+    "color": "lightsteelblue",
+    "valid": true
+  },
+  {
+    "color": "lightyellow",
+    "valid": true
+  },
+  {
+    "color": "lime",
+    "valid": true
+  },
+  {
+    "color": "limegreen",
+    "valid": true
+  },
+  {
+    "color": "linen",
+    "valid": true
+  },
+  {
+    "color": "magenta",
+    "valid": true
+  },
+  {
+    "color": "maroon",
+    "valid": true
+  },
+  {
+    "color": "mediumaquamarine",
+    "valid": true
+  },
+  {
+    "color": "mediumblue",
+    "valid": true
+  },
+  {
+    "color": "mediumorchid",
+    "valid": true
+  },
+  {
+    "color": "mediumpurple",
+    "valid": true
+  },
+  {
+    "color": "mediumseagreen",
+    "valid": true
+  },
+  {
+    "color": "mediumslateblue",
+    "valid": true
+  },
+  {
+    "color": "mediumspringgreen",
+    "valid": true
+  },
+  {
+    "color": "mediumturquoise",
+    "valid": true
+  },
+  {
+    "color": "mediumvioletred",
+    "valid": true
+  },
+  {
+    "color": "midnightblue",
+    "valid": true
+  },
+  {
+    "color": "mintcream",
+    "valid": true
+  },
+  {
+    "color": "mistyrose",
+    "valid": true
+  },
+  {
+    "color": "moccasin",
+    "valid": true
+  },
+  {
+    "color": "navajowhite",
+    "valid": true
+  },
+  {
+    "color": "navy",
+    "valid": true
+  },
+  {
+    "color": "oldlace",
+    "valid": true
+  },
+  {
+    "color": "olive",
+    "valid": true
+  },
+  {
+    "color": "olivedrab",
+    "valid": true
+  },
+  {
+    "color": "orange",
+    "valid": true
+  },
+  {
+    "color": "orangered",
+    "valid": true
+  },
+  {
+    "color": "orchid",
+    "valid": true
+  },
+  {
+    "color": "palegoldenrod",
+    "valid": true
+  },
+  {
+    "color": "palegreen",
+    "valid": true
+  },
+  {
+    "color": "paleturquoise",
+    "valid": true
+  },
+  {
+    "color": "palevioletred",
+    "valid": true
+  },
+  {
+    "color": "papayawhip",
+    "valid": true
+  },
+  {
+    "color": "peachpuff",
+    "valid": true
+  },
+  {
+    "color": "peru",
+    "valid": true
+  },
+  {
+    "color": "pink",
+    "valid": true
+  },
+  {
+    "color": "plum",
+    "valid": true
+  },
+  {
+    "color": "powderblue",
+    "valid": true
+  },
+  {
+    "color": "purple",
+    "valid": true
+  },
+  {
+    "color": "rebeccapurple",
+    "valid": true
+  },
+  {
+    "color": "red",
+    "valid": true
+  },
+  {
+    "color": "rosybrown",
+    "valid": true
+  },
+  {
+    "color": "royalblue",
+    "valid": true
+  },
+  {
+    "color": "saddlebrown",
+    "valid": true
+  },
+  {
+    "color": "salmon",
+    "valid": true
+  },
+  {
+    "color": "sandybrown",
+    "valid": true
+  },
+  {
+    "color": "seagreen",
+    "valid": true
+  },
+  {
+    "color": "seashell",
+    "valid": true
+  },
+  {
+    "color": "sienna",
+    "valid": true
+  },
+  {
+    "color": "silver",
+    "valid": true
+  },
+  {
+    "color": "skyblue",
+    "valid": true
+  },
+  {
+    "color": "slateblue",
+    "valid": true
+  },
+  {
+    "color": "slategray",
+    "valid": true
+  },
+  {
+    "color": "slategrey",
+    "valid": true
+  },
+  {
+    "color": "snow",
+    "valid": true
+  },
+  {
+    "color": "springgreen",
+    "valid": true
+  },
+  {
+    "color": "steelblue",
+    "valid": true
+  },
+  {
+    "color": "tan",
+    "valid": true
+  },
+  {
+    "color": "teal",
+    "valid": true
+  },
+  {
+    "color": "thistle",
+    "valid": true
+  },
+  {
+    "color": "tomato",
+    "valid": true
+  },
+  {
+    "color": "turquoise",
+    "valid": true
+  },
+  {
+    "color": "violet",
+    "valid": true
+  },
+  {
+    "color": "wheat",
+    "valid": true
+  },
+  {
+    "color": "white",
+    "valid": true
+  },
+  {
+    "color": "whitesmoke",
+    "valid": true
+  },
+  {
+    "color": "yellow",
+    "valid": true
+  },
+  {
+    "color": "yellowgreen",
+    "valid": true
+  },
+  {
+    "color": "transparent",
+    "valid": true
+  },
+  {
+    "color": "currentcolor",
+    "valid": true
+  },
+  {
+    "color": "#abc",
+    "valid": true
+  },
+  {
+    "color": "#abcd",
+    "valid": true
+  },
+  {
+    "color": "#123456",
+    "valid": true
+  },
+  {
+    "color": "#12345678",
+    "valid": true
+  },
+  {
+    "color": "ReD",
+    "valid": true
+  },
+  {
+    "color": "rgb(198, 40, 40)",
+    "valid": true
+  },
+  {
+    "color": "rgb(100% 0% 50% / 75%)",
+    "valid": true
+  },
+  {
+    "color": "rgba(1, 2, 3, .5)",
+    "valid": true
+  },
+  {
+    "color": "hsl(120deg 50% 50%)",
+    "valid": true
+  },
+  {
+    "color": "hsla(-.5turn, 20%, 40%, 1)",
+    "valid": true
+  },
+  {
+    "color": "rgb(1e2 2 3)",
+    "valid": true
+  },
+  {
+    "color": "oklch(60% 0.2 25)",
+    "valid": false
+  },
+  {
+    "color": "lab(60% 20 30)",
+    "valid": false
+  },
+  {
+    "color": "color(display-p3 1 0 0)",
+    "valid": false
+  },
+  {
+    "color": "var(--color)",
+    "valid": false
+  },
+  {
+    "color": "CanvasText",
+    "valid": false
+  },
+  {
+    "color": "inherit",
+    "valid": false
+  },
+  {
+    "color": "initial",
+    "valid": false
+  },
+  {
+    "color": "unset",
+    "valid": false
+  },
+  {
+    "color": "url(https://example.invalid/x)",
+    "valid": false
+  },
+  {
+    "color": "red; background:url(x)",
+    "valid": false
+  },
+  {
+    "color": "rgb(256 0 0)",
+    "valid": false
+  },
+  {
+    "color": "rgb(1, 0%, 0)",
+    "valid": false
+  },
+  {
+    "color": "rgba(0,0,0,2)",
+    "valid": false
+  },
+  {
+    "color": "hsl(10 50 50%)",
+    "valid": false
+  },
+  {
+    "color": "rgb(1 / 2 / 3)",
+    "valid": false
+  },
+  {
+    "color": "rgb(1﻿,2,3)",
+    "valid": false
+  },
+  {
+    "color": "rgb(                                                            1 2 3)",
+    "valid": false
+  },
+  {
+    "color": "#12",
+    "valid": false
+  },
+  {
+    "color": "",
+    "valid": false
+  }
+]

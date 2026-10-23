@@ -1,0 +1,32 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <link rel="icon" type="image/x-icon" sizes="16x16 32x32 48x48 64x64 128x128 256x256" href="./favicon.ico" />
+    <link rel="icon" type="image/svg+xml" sizes="any" href="./favicon.svg" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="theme-color" content="#edf0f5" />
+    <script>
+      // 在首屏绘制前应用主题，避免暗色模式刷新时闪白。
+      (() => {
+        let saved
+        try { saved = localStorage.getItem('worklog-theme') } catch {}
+        const theme = saved === 'dark' || saved === 'light'
+          ? saved : matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light'
+        const root = document.documentElement
+        root.dataset.theme = theme
+        root.classList.toggle('dark', theme === 'dark')
+        root.style.colorScheme = theme
+        root.style.backgroundColor = theme === 'dark' ? '#171a21' : '#edf0f5'
+        document.querySelector('meta[name="theme-color"]').content = theme === 'dark' ? '#1b1e26' : '#edf0f5'
+      })()
+    </script>
+    <meta name="description" content="Worklog 个人看板：管理任务与待办，简单、专注、实用。" />
+    <title>Worklog · 个人看板</title>
+  </head>
+  <body>
+    <div id="app"></div>
+    <script vite-ignore src="./config.js"></script>
+    <script type="module" src="/src/main.js"></script>
+  </body>
+</html>

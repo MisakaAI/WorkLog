@@ -1,0 +1,35 @@
+{
+  "name": "worklog",
+  "private": true,
+  "version": "0.0.0",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "test": "npm run test:unit && npm run test:components",
+    "test:unit": "node --test tests/*.test.js",
+    "test:components": "vitest run",
+    "test:backend": "node --test tests/backend.integration.js",
+    "test:e2e": "playwright test",
+    "preview": "vite preview"
+  },
+  "dependencies": {
+    "@remixicon/vue": "^4.9.0",
+    "@tiptap/extension-text-style": "^3.32.0",
+    "@tiptap/pm": "^3.32.0",
+    "@tiptap/starter-kit": "^3.32.0",
+    "@tiptap/vue-3": "^3.32.0",
+    "dayjs": "^1.11.23",
+    "element-plus": "^2.14.7",
+    "monaco-editor": "^0.57.0",
+    "vue": "^3.5.42"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.64.1",
+    "@vitejs/plugin-vue": "^6.0.8",
+    "@vue/test-utils": "^2.5.1",
+    "jsdom": "^29.1.1",
+    "vite": "^8.3.0",
+    "vitest": "^5.0.5"
+  }
+}

@@ -1,0 +1,18 @@
+{
+  "addr": "127.0.0.1:8080",
+  "db_driver": "sqlite",
+  "db_dsn": "/var/lib/worklog/worklog.db",
+  "user_id": "owner",
+  "timezone": "Asia/Shanghai",
+  "static_dir": "/opt/worklog/Web/dist",
+  "calendar_file": "",
+  "token_file": "/var/lib/worklog/mcp-token",
+  "write_token": "",
+  "read_token": "",
+  "basic_user": "worklog",
+  "basic_password": "",
+  "allowed_hosts": ["localhost", "127.0.0.1", "::1"],
+  "allowed_origins": ["http://localhost:5173", "http://127.0.0.1:5173"],
+  "mcp_allow_destructive": false,
+  "stdio_read_only": false
+}

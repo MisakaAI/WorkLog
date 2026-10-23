@@ -1,0 +1,38 @@
+[Unit]
+Description=Worklog web and MCP server
+Wants=network-online.target
+After=network-online.target
+StartLimitIntervalSec=60
+StartLimitBurst=5
+
+[Service]
+Type=simple
+User=worklog
+Group=worklog
+WorkingDirectory=/var/lib/worklog
+ExecStart=/opt/worklog/bin/worklog --conf=/etc/worklog serve
+Restart=on-failure
+RestartSec=5s
+# Worklog allows up to 15 seconds for graceful HTTP shutdown.
+TimeoutStopSec=30s
+KillSignal=SIGTERM
+
+StateDirectory=worklog
+StateDirectoryMode=0700
+UMask=0077
+
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths=/var/lib/worklog
+CapabilityBoundingSet=
+AmbientCapabilities=
+RestrictSUIDSGID=true
+
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=worklog
+
+[Install]
+WantedBy=multi-user.target
