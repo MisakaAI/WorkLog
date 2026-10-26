@@ -1,38 +1,52 @@
+# 服务描述、依赖与启动频率限制。
 [Unit]
+# 服务说明，显示在 systemctl status 等命令的输出中。
 Description=Worklog web and MCP server
+# 启动时同时拉起网络就绪目标；该目标失败不会阻止本服务启动。
 Wants=network-online.target
+# 在网络就绪目标启动完成后再启动本服务。
 After=network-online.target
+# 在 60 秒的时间窗口内统计启动次数。
 StartLimitIntervalSec=60
+# 每个时间窗口最多允许启动 5 次，超出后停止尝试启动。
 StartLimitBurst=5
 
+# 服务运行方式、目录权限与安全限制。
 [Service]
-Type=simple
+# 使用专用的非 root 用户运行，组默认使用该用户的主组。
 User=worklog
-Group=worklog
+# 设置进程工作目录，供相对路径访问使用。
 WorkingDirectory=/var/lib/worklog
+# 执行服务程序，从 /etc/worklog 读取配置并启动服务。
 ExecStart=/opt/worklog/bin/worklog --conf=/etc/worklog serve
+# 仅在异常退出等失败情况下自动重启，正常退出或手动停止不重启。
 Restart=on-failure
+# 自动重启前等待 5 秒。
 RestartSec=5s
-# Worklog allows up to 15 seconds for graceful HTTP shutdown.
+# 停止时最多等待 30 秒，超时后强制终止；程序的 HTTP 优雅关闭最多需要 15 秒。
 TimeoutStopSec=30s
-KillSignal=SIGTERM
 
+# 自动创建并管理 /var/lib/worklog，归运行用户所有，且不受下方只读限制影响。
 StateDirectory=worklog
+# 状态目录仅允许所属用户读取、写入和进入。
 StateDirectoryMode=0700
+# 屏蔽新建文件和目录的组及其他用户权限，通常分别得到 0600 和 0700。
 UMask=0077
 
+# 禁止进程及其子进程通过 exec 执行程序获得额外权限。
 NoNewPrivileges=true
+# 为服务提供隔离的 /tmp 和 /var/tmp，避免与其他服务共享临时文件。
 PrivateTmp=true
+# 将文件系统设为只读，状态目录及 systemd 规定的 API、临时目录等例外仍可写。
 ProtectSystem=strict
+# 禁止服务访问 /home、/root 和 /run/user。
 ProtectHome=true
-ReadWritePaths=/var/lib/worklog
+# 清空 Linux capability 边界集，禁止服务获得这些特权能力。
 CapabilityBoundingSet=
-AmbientCapabilities=
+# 禁止创建或设置带 SUID/SGID 权限位的文件和目录。
 RestrictSUIDSGID=true
 
-StandardOutput=journal
-StandardError=journal
-SyslogIdentifier=worklog
-
+# 定义 systemctl enable 时的服务启用关系。
 [Install]
+# 启用后由多用户目标拉起，实现常规系统启动时自动运行。
 WantedBy=multi-user.target
