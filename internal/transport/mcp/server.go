@@ -53,6 +53,7 @@ func merge(a, b map[string]any) map[string]any {
 	}
 	return out
 }
+
 // definitions 集中声明工具参数和行为提示；这些元数据不能替代服务端权限校验。
 func definitions() []definition {
 	empty := map[string]any{}
@@ -68,7 +69,7 @@ func definitions() []definition {
 	taskFields := map[string]any{"title": str("Plain-text task title, at most 100 UTF-16 code units", 100), "description": text("Plain-text task details; empty clears"), "projectId": text("Existing project ID or empty string for unassigned"), "status": status, "tag": str("Existing category name, at most 40 UTF-16 code units", 40), "priority": enumeration("Priority", "低", "中", "高", "极高"), "startDate": text("YYYY-MM-DD or empty; no automatic date filling"), "date": text("Due date YYYY-MM-DD or empty"), "color": enumeration("Card background", "white", "red", "orange", "blue", "green")}
 	filters := map[string]any{"projectId": text("Project ID or empty string to select unassigned"), "status": status, "tag": text("Exact category name"), "priority": taskFields["priority"], "search": text("Case-insensitive title/description search"), "startDate": date, "endDate": date}
 	return []definition{
-		{"list_projects", "List ordered projects and projectRevision for subsequent writes.", []string{}, empty, true, false},
+		{"list_projects", "List active projects by default; includeArchived returns the complete ordered collection and projectRevision.", []string{}, map[string]any{"includeArchived": boolean("Include archived projects")}, true, false},
 		{"create_project", "Create one project atomically with projectRevision and idempotency protection. Returns the complete collection.", []string{"name", "expectedRevision", "idempotencyKey"}, map[string]any{"name": str("Unique project name, at most 40 UTF-16 code units", 40), "expectedRevision": rev, "idempotencyKey": key}, false, false},
 		{"rename_project", "Rename one project using the current collection revision.", []string{"id", "name", "expectedRevision"}, merge(projectExpected, map[string]any{"name": str("New unique project name, at most 40 UTF-16 code units", 40)}), false, false},
 		{"delete_project", "Delete a project and atomically move its tasks to unassigned. Disabled unless independently authorized by server policy; model text cannot grant permission.", []string{"id", "expectedRevision"}, projectExpected, false, true},

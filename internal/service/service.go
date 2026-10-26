@@ -30,7 +30,7 @@ func New(repo repository.Repository, loc *time.Location) *Service {
 	return &Service{Repo: repo, Location: loc, Now: time.Now}
 }
 func (s *Service) Today() string { return s.Now().In(s.Location).Format("2006-01-02") }
-func (s *Service) Dashboard(ctx context.Context, id domain.Identity) (domain.Dashboard, error) {
+func (s *Service) Dashboard(ctx context.Context, id domain.Identity, includeArchived ...bool) (domain.Dashboard, error) {
 	var out domain.Dashboard
 	if err := id.Check(false, false); err != nil {
 		return out, err
@@ -39,6 +39,11 @@ func (s *Service) Dashboard(ctx context.Context, id domain.Identity) (domain.Das
 		st, e := u.Load()
 		if e == nil {
 			out = st.Dashboard
+			if len(includeArchived) > 0 && includeArchived[0] {
+				out.IncludeArchived = true
+			} else {
+				out = domain.VisibleDashboard(out)
+			}
 		}
 		return e
 	})
@@ -51,6 +56,7 @@ func copyDashboard(d domain.Dashboard) domain.Dashboard {
 	d.Todos = slices.Clone(d.Todos)
 	return d
 }
+
 // copyState 复制本次修改会涉及的切片和版本表，保留修改前的状态用于比较。
 func copyState(st *domain.State) *domain.State {
 	out := *st
@@ -66,6 +72,7 @@ func increment(v *int64) error {
 	*v++
 	return nil
 }
+
 // finalize 在保存前校验完整状态，并统一推进工作台、集合及资源的版本。
 // 集合操作可强制消耗版本；普通快照保存只更新实际发生变化的资源版本。
 func finalize(old, st *domain.State, forceProjects, forceCategories bool) error {
@@ -135,16 +142,25 @@ func (s *Service) SaveDashboard(ctx context.Context, id domain.Identity, d domai
 		if old.Revision != d.Revision {
 			return domain.Conflict()
 		}
+		if !d.IncludeArchived {
+			domain.PreserveArchived(old.Dashboard, &d)
+		}
 		if !id.Destructive && removesResources(old.Dashboard, d) {
 			return domain.Forbidden()
 		}
 		st := copyState(old)
 		st.Dashboard = d
+		st.IncludeArchived = false
 		if e = finalize(old, st, false, false); e != nil {
 			return e
 		}
 		if e = u.Save(st); e == nil {
 			out = st.Dashboard
+			if d.IncludeArchived {
+				out.IncludeArchived = true
+			} else {
+				out = domain.VisibleDashboard(out)
+			}
 		}
 		return e
 	})
@@ -271,6 +287,7 @@ type IDInput struct {
 	ID string `json:"id"`
 }
 type ProjectChange struct {
+	IncludeArchived  bool             `json:"includeArchived,omitempty"`
 	ExpectedRevision int64            `json:"expectedRevision"`
 	Projects         []domain.Project `json:"projects"`
 }
@@ -312,6 +329,7 @@ type CreateTask struct {
 	Color          string `json:"color,omitempty"`
 	IdempotencyKey string `json:"idempotencyKey"`
 }
+
 // UpdateTask 用指针区分“未提供字段”与“明确清空字段”，避免局部更新覆盖其他内容。
 type UpdateTask struct {
 	ID              string  `json:"id"`
@@ -394,6 +412,7 @@ func decode[T any](raw json.RawMessage, keys ...string) (T, error) {
 	err := domain.StrictJSON(raw, &v, keys...)
 	return v, err
 }
+
 // fingerprint 将操作名与规范化后的 JSON 一起计算摘要，避免字段顺序影响幂等判断。
 func fingerprint(op string, raw json.RawMessage) string {
 	var v any
@@ -403,8 +422,9 @@ func fingerprint(op string, raw json.RawMessage) string {
 	return hex.EncodeToString(h[:])
 }
 func collection(st, old *domain.State) CollectionResult {
-	out := CollectionResult{Projects: st.Projects, Categories: st.Categories, ProjectRevision: st.ProjectRevision, CategoryRevision: st.CategoryRevision, Revision: st.Revision, UpdatedTasks: []domain.TaskResource{}}
-	for _, t := range st.Tasks {
+	visible := domain.VisibleDashboard(st.Dashboard)
+	out := CollectionResult{Projects: visible.Projects, Categories: st.Categories, ProjectRevision: st.ProjectRevision, CategoryRevision: st.CategoryRevision, Revision: st.Revision, UpdatedTasks: []domain.TaskResource{}}
+	for _, t := range visible.Tasks {
 		if st.TaskVersions[t.ID.Key()] != old.TaskVersions[t.ID.Key()] {
 			out.UpdatedTasks = append(out.UpdatedTasks, taskResource(st, t))
 		}
@@ -525,9 +545,17 @@ func mutate(op string, raw json.RawMessage, st *domain.State) (mutation, error) 
 		if e = expected(st.ProjectRevision, in.ExpectedRevision); e != nil {
 			return fail(e)
 		}
+		previousProjects := st.Projects
 		st.Projects = in.Projects
+		if !in.IncludeArchived {
+			for _, p := range previousProjects {
+				if p.Archived && projectIndex(st, p.ID) < 0 {
+					st.Projects = append(st.Projects, p)
+				}
+			}
+		}
 		valid := map[string]bool{}
-		for _, p := range in.Projects {
+		for _, p := range st.Projects {
 			valid[p.ID] = true
 		}
 		for i := range st.Tasks {
@@ -763,12 +791,24 @@ func incrementVersionNoop(versions map[string]int64, id string) error {
 	return nil
 }
 func readOperation(op string, raw json.RawMessage, st *domain.State) (any, error) {
+	if op != "list_projects" {
+		copy := *st
+		copy.Dashboard = domain.VisibleDashboard(st.Dashboard)
+		st = &copy
+	}
 	switch op {
 	case "list_projects":
-		if _, e := decode[struct{}](raw); e != nil {
+		in, e := decode[struct {
+			IncludeArchived bool `json:"includeArchived"`
+		}](raw)
+		if e != nil {
 			return nil, e
 		}
-		return map[string]any{"projects": st.Projects, "projectRevision": st.ProjectRevision, "revision": st.Revision}, nil
+		projects := st.Projects
+		if !in.IncludeArchived {
+			projects = domain.VisibleDashboard(st.Dashboard).Projects
+		}
+		return map[string]any{"projects": projects, "projectRevision": st.ProjectRevision, "revision": st.Revision}, nil
 	case "list_categories":
 		if _, e := decode[struct{}](raw); e != nil {
 			return nil, e

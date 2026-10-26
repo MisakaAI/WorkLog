@@ -258,11 +258,11 @@ func (u *unit) Load() (*domain.State, error) {
 	if err != nil {
 		return nil, err
 	}
-	rows, err := u.rows("SELECT id,name FROM projects WHERE user_id=? ORDER BY position", u.user)
+	rows, err := u.rows("SELECT id,name,archived FROM projects WHERE user_id=? ORDER BY position", u.user)
 	if err != nil {
 		return nil, err
 	}
-	s.Projects, err = collect(rows, func(r *sql.Rows) (p domain.Project, e error) { e = r.Scan(&p.ID, &p.Name); return })
+	s.Projects, err = collect(rows, func(r *sql.Rows) (p domain.Project, e error) { e = r.Scan(&p.ID, &p.Name, &p.Archived); return })
 	if err != nil {
 		return nil, err
 	}
@@ -343,7 +343,7 @@ func (u *unit) Save(s *domain.State) error {
 		return e
 	}
 	for i, p := range s.Projects {
-		if _, e := u.exec("INSERT INTO projects(user_id,id,name,name_key,position) VALUES (?,?,?,?,?)", u.user, p.ID, p.Name, strings.ToLower(p.Name), i); e != nil {
+		if _, e := u.exec("INSERT INTO projects(user_id,id,name,name_key,position,archived) VALUES (?,?,?,?,?,?)", u.user, p.ID, p.Name, strings.ToLower(p.Name), i, p.Archived); e != nil {
 			return e
 		}
 	}

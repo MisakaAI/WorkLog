@@ -5,7 +5,7 @@ import {
   ElForm, ElFormItem, ElInput, ElSelect, ElOption, ElMessage, ElMessageBox,
   ElRadioGroup, ElRadioButton,
 } from 'element-plus'
-import { RiAddFill, RiFilterLine, RiFilterOffLine } from '@remixicon/vue'
+import { RiAddFill, RiFilterLine, RiFilterOffLine, RiInboxArchiveLine, RiInboxUnarchiveLine } from '@remixicon/vue'
 import zhCn from 'element-plus/es/locale/lang/zh-cn'
 import 'dayjs/locale/zh-cn'
 import { getWorklogDates, hasWorklogContent } from './api/worklog'
@@ -14,7 +14,7 @@ import TaskBoard from './components/TaskBoard.vue'
 import TaskDatePicker from './components/TaskDatePicker.vue'
 import GanttChart from './components/GanttChart.vue'
 import WorklogEditor from './components/WorklogEditor.vue'
-import { getDashboard, saveDashboard } from './api'
+import { getDashboard, saveDashboard, visibleDashboard } from './api'
 import { getCalendarDay } from './workCalendar'
 import { useWorkCalendar } from './composables/useWorkCalendar'
 import { useToday } from './composables/useToday'
@@ -22,7 +22,7 @@ import { newID } from './id'
 import {
   ALL_PROJECTS, columns, tags, priorities, cardColors, replaceProjects,
   filterTasks, todayISO, validateDates, validateProjects, projectLanes, moveTaskToLane,
-  validateCategories, replaceCategories, reorderProjects,
+  validateCategories, replaceCategories,
 } from './dashboard'
 import { useTheme } from './composables/useTheme'
 import { useDraftSort } from './composables/useDraftSort'
@@ -106,11 +106,24 @@ const dialog = ref(false)
 const editingId = ref(null)
 const projectDialog = ref(false)
 const draftProjects = ref([])
+const showArchivedProjects = ref(false)
+const projectSnapshot = ref(null)
+const visibleDraftProjects = computed({
+  get: () => draftProjects.value.filter(project => Boolean(project.archived) === showArchivedProjects.value),
+  set: projects => {
+    let index = 0
+    draftProjects.value = draftProjects.value.map(project => Boolean(project.archived) === showArchivedProjects.value ? projects[index++] : project)
+  },
+})
+function toggleProjectArchive(project) {
+  resetProjectDrag()
+  project.archived = !project.archived
+}
 const newProjectName = ref('')
 const {
   draggedId: draggedProject, dropIndex: projectDropIndex, reset: resetProjectDrag,
-  start: startProjectDrag, preview: previewProjectDrop, leave: leaveProjectList, drop: dropProject,
-} = useDraftSort(draftProjects, 'project')
+  start: startProjectDrag, preview: previewProjectDrop, leave: leaveProjectList, drop: dropProject, move: moveProject,
+} = useDraftSort(visibleDraftProjects, 'project')
 const categoryDialog = ref(false)
 const draftCategories = ref([])
 const {
@@ -211,11 +224,17 @@ async function saveCategories() {
     categoryDialog.value = false
   }
 }
-function openProjects() {
-  resetProjectDrag()
-  draftProjects.value = data.value.projects.map(project => ({ ...project }))
-  newProjectName.value = ''
-  projectDialog.value = true
+async function openProjects() {
+  try {
+    const snapshot = await getDashboard({ includeArchived: true })
+    if (snapshot.revision !== data.value.revision) return ElMessage.warning('数据已被修改，请刷新页面后重试')
+    projectSnapshot.value = snapshot
+    resetProjectDrag()
+    showArchivedProjects.value = false
+    draftProjects.value = snapshot.projects.map(project => ({ ...project }))
+    newProjectName.value = ''
+    projectDialog.value = true
+  } catch (e) { ElMessage.error(`读取项目失败：${e.message}`) }
 }
 function addDraftProject() {
   const name = newProjectName.value.trim()
@@ -226,6 +245,7 @@ function addDraftProject() {
   const message = validateProjects(projects)
   if (message) return ElMessage.warning(message)
   draftProjects.value = projects
+  showArchivedProjects.value = false
   newProjectName.value = ''
 }
 async function saveProjects() {
@@ -234,11 +254,15 @@ async function saveProjects() {
   if (newProjectName.value.trim()) return
   const message = validateProjects(draftProjects.value)
   if (message) return ElMessage.warning(message)
-  data.value = replaceProjects(data.value, draftProjects.value)
-  if (await persist()) {
+  persisting.value = true
+  try {
+    const saved = await saveDashboard(replaceProjects(projectSnapshot.value, draftProjects.value))
+    data.value = visibleDashboard(saved)
+    committed = JSON.parse(JSON.stringify(data.value))
     if (selectedProject.value !== ALL_PROJECTS && selectedProject.value !== '' && !data.value.projects.some(project => project.id === selectedProject.value)) selectedProject.value = ALL_PROJECTS
     projectDialog.value = false
-  }
+  } catch (e) { ElMessage.error(`保存失败：${e.message}`) }
+  finally { persisting.value = false }
 }
 async function addTodo() {
   if (persisting.value || !newTodo.value.trim()) return
@@ -395,15 +419,16 @@ onMounted(load)
       </ElDialog>
 
       <ElDialog v-model="projectDialog" title="项目管理" width="min(500px, 92vw)" @closed="resetProjectDrag">
-        <p class="project-help">拖动排序手柄调整项目顺序。删除项目不会删除任务，任务会移至“未分配”。修改后点击保存生效。</p>
+        <p class="project-help">拖动排序手柄调整项目顺序。归档后项目及其任务不再展示，可在“已归档”中恢复。删除项目不会删除任务，任务会移至“未分配”。修改后点击保存生效。</p>
+        <ElButton :type="showArchivedProjects ? 'primary' : 'default'" :aria-pressed="showArchivedProjects" @click="showArchivedProjects = !showArchivedProjects; resetProjectDrag()">{{ showArchivedProjects ? '返回未归档' : '已归档' }}</ElButton>
         <ElForm class="project-form" @submit.prevent="saveProjects">
           <div class="project-add"><ElInput v-model="newProjectName" placeholder="新项目名称" aria-label="新项目名称" maxlength="40" @keydown.enter.prevent="addDraftProject" /><ElButton @click="addDraftProject"><Icon name="Add" :size="16" />添加</ElButton></div>
           <div class="project-edit-list project-sort-list" @dragover="previewProjectDrop" @dragleave="leaveProjectList" @drop.prevent.stop="dropProject">
-            <div v-for="(project, index) in draftProjects" :key="project.id" class="project-edit-row project-sort-row" :class="{ 'is-dragging': draggedProject === project.id, 'drop-before': projectDropIndex === index, 'drop-after': projectDropIndex === draftProjects.length && index === draftProjects.length - 1 }">
-              <button type="button" class="project-drag-handle" draggable="true" :aria-label="`拖动排序：${project.name}；方向键上下移动`" title="拖动排序，也可使用上下方向键" @dragstart="startProjectDrag($event, project.id)" @dragend="resetProjectDrag" @keydown.up.prevent="draftProjects = reorderProjects(draftProjects, project.id, draftProjects[draftProjects.indexOf(project) - 1]?.id)" @keydown.down.prevent="draftProjects = reorderProjects(draftProjects, project.id, draftProjects[draftProjects.indexOf(project) + 1]?.id)">⠿</button>
-              <ElInput v-model="project.name" :aria-label="`项目名称：${project.name}`" maxlength="40" /><ElButton text type="danger" :aria-label="`删除项目：${project.name}`" @click="draftProjects = draftProjects.filter(item => item.id !== project.id)"><Icon name="Delete" :size="17" /></ElButton>
+            <div v-for="(project, index) in visibleDraftProjects" :key="project.id" class="project-edit-row project-sort-row" :class="{ 'is-dragging': draggedProject === project.id, 'drop-before': projectDropIndex === index, 'drop-after': projectDropIndex === visibleDraftProjects.length && index === visibleDraftProjects.length - 1 }">
+              <button type="button" class="project-drag-handle" draggable="true" :aria-label="`拖动排序：${project.name}；方向键上下移动`" title="拖动排序，也可使用上下方向键" @dragstart="startProjectDrag($event, project.id)" @dragend="resetProjectDrag" @keydown.up.prevent="moveProject(project.id, -1)" @keydown.down.prevent="moveProject(project.id, 1)">⠿</button>
+              <ElInput v-model="project.name" :aria-label="`项目名称：${project.name}`" maxlength="40" /><ElButton text :aria-label="`${project.archived ? '取消归档' : '归档'}项目：${project.name}`" :title="project.archived ? '取消归档' : '归档'" @click="toggleProjectArchive(project)"><RiInboxUnarchiveLine v-if="project.archived" :size="17" aria-hidden="true" /><RiInboxArchiveLine v-else :size="17" aria-hidden="true" /></ElButton><ElButton text type="danger" :aria-label="`删除项目：${project.name}`" @click="draftProjects = draftProjects.filter(item => item.id !== project.id)"><Icon name="Delete" :size="17" /></ElButton>
             </div>
-            <ElEmpty v-if="!draftProjects.length" :image-size="48" description="还没有项目，添加后即可按项目管理任务。" />
+            <ElEmpty v-if="!visibleDraftProjects.length" :image-size="48" :description="showArchivedProjects ? '暂无已归档项目。' : '暂无未归档项目。'" />
           </div>
           <div class="dialog-actions"><ElButton class="cancel-button" @click="projectDialog = false">取消</ElButton><ElButton type="primary" native-type="submit">保存项目</ElButton></div>
         </ElForm>

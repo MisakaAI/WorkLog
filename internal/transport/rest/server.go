@@ -226,11 +226,13 @@ func body(r *http.Request) (json.RawMessage, error) {
 	return b, nil
 }
 func (s *Server) dashboard(w http.ResponseWriter, r *http.Request) {
-	if len(r.URL.Query()) != 0 {
-		s.fail(w, r, domain.Bad("此接口不接受查询参数"))
+	q := r.URL.Query()
+	include := q.Get("includeArchived")
+	if len(q) > 1 || len(q["includeArchived"]) > 1 || (len(q) == 1 && include != "true" && include != "false") {
+		s.fail(w, r, domain.Bad("仅支持 includeArchived=true 或 false"))
 		return
 	}
-	out, e := s.Service.Dashboard(r.Context(), security.Identity(r.Context()))
+	out, e := s.Service.Dashboard(r.Context(), security.Identity(r.Context()), include == "true")
 	if e != nil {
 		s.fail(w, r, e)
 		return
@@ -317,7 +319,7 @@ func (s *Server) operation(op string) http.HandlerFunc {
 					return
 				}
 				var b []byte
-				if k == "done" {
+				if k == "done" || k == "includeArchived" {
 					if v[0] != "true" && v[0] != "false" {
 						s.fail(w, r, domain.Bad("done 必须为 true 或 false"))
 						return

@@ -30,6 +30,7 @@ func Conflict() error {
 }
 func Forbidden() error { return &Error{403, "FORBIDDEN", "没有执行此操作的授权"} }
 func NotFound() error  { return &Error{404, "NOT_FOUND", "资源不存在"} }
+
 // Public 仅向客户端暴露业务错误，隐藏数据库、路径及其他内部错误细节。
 func Public(err error) *Error {
 	if errors.Is(err, context.DeadlineExceeded) || errors.Is(err, context.Canceled) {
@@ -94,8 +95,9 @@ func (id *ID) UnmarshalJSON(b []byte) error {
 }
 
 type Project struct {
-	ID   string `json:"id"`
-	Name string `json:"name"`
+	ID       string `json:"id"`
+	Name     string `json:"name"`
+	Archived bool   `json:"archived"`
 }
 type Task struct {
 	ID          ID     `json:"id"`
@@ -115,13 +117,16 @@ type Todo struct {
 	Done  bool   `json:"done"`
 }
 type Dashboard struct {
-	Revision      int64     `json:"revision"`
-	PersonalLabel string    `json:"personalLabel"`
-	Projects      []Project `json:"projects"`
-	Categories    []string  `json:"categories"`
-	Tasks         []Task    `json:"tasks"`
-	Todos         []Todo    `json:"todos"`
+	// IncludeArchived 表示调用方持有完整快照；默认保存须保留未下发的归档数据。
+	IncludeArchived bool      `json:"includeArchived,omitempty"`
+	Revision        int64     `json:"revision"`
+	PersonalLabel   string    `json:"personalLabel"`
+	Projects        []Project `json:"projects"`
+	Categories      []string  `json:"categories"`
+	Tasks           []Task    `json:"tasks"`
+	Todos           []Todo    `json:"todos"`
 }
+
 // State 在工作台快照之外维护集合和单项资源的版本，供细粒度接口检测并发修改。
 type State struct {
 	Dashboard
@@ -161,8 +166,9 @@ func ValidDate(s string) bool {
 	return e == nil && t.Year() >= 1 && t.Format("2006-01-02") == s
 }
 func ValidVersion(v int64) bool { return v >= 0 && v < MaxVersion }
+
 // Units 按 UTF-16 码元计数，与浏览器 String.length 的长度规则保持一致。
-func Units(s string) int        { return len(utf16.Encode([]rune(s))) }
+func Units(s string) int { return len(utf16.Encode([]rune(s))) }
 
 // Trim 与 JavaScript String.trim 的空白规则一致，包含 BOM，不包含 U+0085。
 func Trim(s string) string {
@@ -191,6 +197,7 @@ func member(s string, values ...string) bool {
 	}
 	return false
 }
+
 // Validate 校验快照的字段、唯一性和引用关系，同时原地规范化名称。
 // 调用方若需保留原始输入，应先复制数据。
 func Validate(d *Dashboard) error {

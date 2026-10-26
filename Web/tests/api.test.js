@@ -35,6 +35,30 @@ test('本地模式不调用 fetch，不加载旧示例缓存，保存后重新�
   assert.equal(storage.get(DASHBOARD_KEY), '{invalid')
 })
 
+test('本地归档默认隐藏，普通保存不丢失归档任务，可恢复和删除', async t => {
+  setup(t)
+  const initial = { ...emptyDashboard(), revision: 0, projects: [{ id: 'p', name: '项目', archived: true }], tasks: [{ id: 't', title: '任务', description: '', projectId: 'p', status: 'planned', tag: '开发', priority: '中', startDate: '', date: '', color: 'white' }] }
+  const archived = await saveDashboard(initial)
+  assert.equal(archived.projects.length, 0)
+  assert.equal(archived.tasks.length, 0)
+  await saveDashboard({ ...archived, personalLabel: '新文字' })
+  const full = await getDashboard({ includeArchived: true })
+  assert.equal(full.projects[0].archived, true)
+  assert.equal(full.tasks.length, 1)
+  full.projects[0].archived = false
+  await saveDashboard(full)
+  assert.equal((await getDashboard()).tasks.length, 1)
+  const restored = await getDashboard({ includeArchived: true })
+  restored.projects[0].archived = true
+  await saveDashboard(restored)
+  const deleted = await getDashboard({ includeArchived: true })
+  deleted.projects = []
+  deleted.tasks[0].projectId = ''
+  await saveDashboard(deleted)
+  assert.equal((await getDashboard()).projects.length, 0)
+  assert.equal((await getDashboard()).tasks[0].projectId, '')
+})
+
 test('远端模式不读取/写入本地数据，快照 GET/PUT 路径与版本一致', async t => {
   setup(t)
   globalThis.WORKLOG_CONFIG = { apiBaseUrl: '/services/api/' }

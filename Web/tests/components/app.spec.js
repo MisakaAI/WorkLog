@@ -36,6 +36,28 @@ beforeEach(() => {
 })
 afterEach(() => { wrapper?.unmount(); wrapper = null; vi.useRealTimers(); delete globalThis.WORKLOG_CONFIG })
 
+it('项目管理默认未归档，可归档、查看归档、取消归档及删除，保存完整快照', async () => {
+  const active = { id: 'p', name: '当前项目' }
+  const archived = { id: 'a', name: '旧项目', archived: true }
+  const snapshot = { ...emptyDashboard(), revision: 0, projects: [active] }
+  getDashboard.mockResolvedValueOnce(snapshot).mockResolvedValue({ ...snapshot, includeArchived: true, projects: [active, archived] })
+  open(); await flushPromises()
+  await wrapper.findAll('button').find(button => button.text() === '项目管理').trigger('click')
+  await flushPromises()
+  expect(wrapper.find('input[aria-label="项目名称：当前项目"]').exists()).toBe(true)
+  expect(wrapper.find('input[aria-label="项目名称：旧项目"]').exists()).toBe(false)
+  await wrapper.find('button[aria-label="归档项目：当前项目"]').trigger('click')
+  expect(wrapper.find('input[aria-label="项目名称：当前项目"]').exists()).toBe(false)
+  await wrapper.findAll('button').find(button => button.text() === '已归档').trigger('click')
+  expect(wrapper.findAll('.project-form .project-edit-row')).toHaveLength(2)
+  expect(wrapper.find('button[aria-label="删除项目：旧项目"]').exists()).toBe(true)
+  await wrapper.find('button[aria-label="取消归档项目：当前项目"]').trigger('click')
+  expect(wrapper.find('input[aria-label="项目名称：当前项目"]').exists()).toBe(false)
+  await wrapper.find('button[aria-label="删除项目：旧项目"]').trigger('click')
+  await wrapper.find('form.project-form').trigger('submit'); await flushPromises()
+  expect(saveDashboard).toHaveBeenLastCalledWith(expect.objectContaining({ includeArchived: true, projects: [expect.objectContaining({ id: 'p', archived: false })] }))
+})
+
 it('工作台加载失败后真实点击重试恢复，不渲染空工作台代替失败', async () => {
   getDashboard.mockRejectedValueOnce(new Error('读取失败'))
   open(); await flushPromises()

@@ -77,9 +77,10 @@ export function parseDashboard(value) {
   const error = new Error('看板数据格式不正确')
   if (!value || !['projects', 'tasks', 'todos'].every(key => Array.isArray(value[key]))) throw error
   const { projects, tasks, todos, categories = tags } = value
+  if (value.includeArchived !== undefined && typeof value.includeArchived !== 'boolean') throw error
   if (value.personalLabel !== undefined && (typeof value.personalLabel !== 'string' || value.personalLabel.length > 255)) throw error
   if (validateCategories(categories)) throw error
-  if (!projects.every(project => project && typeof project.id === 'string' && project.id && project.id !== ALL_PROJECTS && typeof project.name === 'string')) throw error
+  if (!projects.every(project => project && typeof project.id === 'string' && project.id && project.id !== ALL_PROJECTS && typeof project.name === 'string' && (project.archived === undefined || typeof project.archived === 'boolean'))) throw error
   const projectIds = new Set(projects.map(project => project.id))
   if (projectIds.size !== projects.length || validateProjects(projects)) throw error
   const validId = id => (typeof id === 'string' && id.length > 0) || Number.isSafeInteger(id)

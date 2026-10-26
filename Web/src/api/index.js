@@ -13,10 +13,18 @@ function validateSnapshot(value) {
 }
 
 // 是否配置后端决定数据来源；网络错误不会自动切换本地存储，以免产生两份数据。
-export async function getDashboard() {
-  if (getBackendURL()) return validateSnapshot(await requestJSON('/dashboard'))
+export function visibleDashboard(snapshot) {
+  const hidden = new Set(snapshot.projects.filter(project => project.archived).map(project => project.id))
+  const visible = { ...snapshot, projects: snapshot.projects.filter(project => !project.archived), tasks: snapshot.tasks.filter(task => !hidden.has(task.projectId)) }
+  delete visible.includeArchived
+  return visible
+}
+
+export async function getDashboard({ includeArchived = false } = {}) {
+  if (getBackendURL()) return validateSnapshot(await requestJSON(`/dashboard${includeArchived ? '?includeArchived=true' : ''}`))
   const cached = localStorage.getItem(DASHBOARD_KEY)
-  return cached === null ? { ...emptyDashboard(), revision: 0 } : validateSnapshot(JSON.parse(cached))
+  const snapshot = cached === null ? { ...emptyDashboard(), revision: 0 } : validateSnapshot(JSON.parse(cached))
+  return includeArchived ? { ...snapshot, includeArchived: true } : visibleDashboard(snapshot)
 }
 
 export async function saveDashboard(snapshot) {
@@ -27,9 +35,18 @@ export async function saveDashboard(snapshot) {
   // localStorage 不提供事务，这并不等同于服务端的原子并发保护。
   const revision = cached === null ? 0 : validateSnapshot(JSON.parse(cached)).revision
   if (revision !== snapshot.revision) throw new Error('工作台已被其他页面修改，请重新加载后再保存')
-  const saved = { ...snapshot, revision: revision + 1 }
+  let merged = snapshot
+  if (!snapshot.includeArchived && cached !== null) {
+    const old = validateSnapshot(JSON.parse(cached))
+    const archived = old.projects.filter(project => project.archived)
+    const hidden = new Set(archived.map(project => project.id))
+    merged = { ...snapshot, projects: [...snapshot.projects.filter(project => !hidden.has(project.id)), ...archived], tasks: [...snapshot.tasks, ...old.tasks.filter(task => hidden.has(task.projectId)).map(task => ({ ...task, tag: snapshot.categories.includes(task.tag) ? task.tag : snapshot.categories[0] }))] }
+  }
+  const saved = { ...merged, revision: revision + 1 }
+  delete saved.includeArchived
+  validateSnapshot(saved)
   localStorage.setItem(DASHBOARD_KEY, JSON.stringify(saved))
-  return saved
+  return snapshot.includeArchived ? { ...saved, includeArchived: true } : visibleDashboard(saved)
 }
 
 export async function getWorkCalendar() {

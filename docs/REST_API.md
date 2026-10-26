@@ -57,6 +57,15 @@ Vue 工作台使用完整快照 API；细粒度资源接口供其他客户端集
 
 日志和日历不属于 dashboard 快照。日历不再通过 REST API 提供：前端在本地和后端模式下都读取同目录的 `work-calendar.json`，默认包含 2026 年节假日／调休，没有日历写 API。
 
+## 项目归档与快照范围
+
+- 项目新增布尔字段 `archived`，历史项目默认 `false`。归档不删除项目或关联任务。
+- `GET /api/dashboard` 默认只返回未归档项目及其任务；`GET /api/dashboard?includeArchived=true` 返回全部数据，并携带 `includeArchived: true`。
+- `PUT /api/dashboard` 普通快照保存会保留未下发的归档项目和任务。管理归档数据时应先读取完整快照，再携带 `includeArchived: true` 和当前 `revision` 保存；设置项目 `archived: true/false` 即归档／取消归档。完整快照中删除项目时仍需将其任务移至未分配。
+- `GET /api/projects` 默认隐藏归档项目，使用 `?includeArchived=true` 可读取全部；默认任务列表及摘要也排除归档项目的任务。
+- `PUT /api/projects` 默认保留省略的归档项目；若确需删除归档项目，提交完整集合并附带 `includeArchived: true`。删除仍受破坏性权限限制。
+- 项目管理的归档、取消归档及删除均在点击“保存项目”后生效。
+
 ## 项目集合
 
 `GET /api/projects` 返回：
