@@ -59,6 +59,8 @@ func New(svc *service.Service, c config.Config, logger *slog.Logger) http.Handle
 	r.Route("/api", func(r chi.Router) {
 		r.Get("/dashboard", s.dashboard)
 		r.Put("/dashboard", s.saveDashboard)
+		r.Get("/projects/export", s.exportProjects)
+		r.Post("/projects/import", s.importProjects)
 		r.Get("/projects", s.operation("list_projects"))
 		r.Put("/projects", s.operation("replace_projects"))
 		r.Get("/categories", s.operation("list_categories"))

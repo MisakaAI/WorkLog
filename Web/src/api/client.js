@@ -12,7 +12,7 @@ export function getBackendURL() {
 }
 
 // 统一请求超时与错误格式；仅同源请求携带浏览器凭证，不在前端存储 MCP Token。
-export async function requestJSON(path, { method = 'GET', body } = {}) {
+export async function requestJSON(path, { method = 'GET', body, binary = false, zipBody = false } = {}) {
   const base = getBackendURL()
   if (!base) throw new Error('未配置后端')
   const controller = new AbortController()
@@ -20,8 +20,8 @@ export async function requestJSON(path, { method = 'GET', body } = {}) {
   try {
     const response = await fetch(`${base === '/' ? '' : base}${path}`, {
       method, signal: controller.signal, credentials: 'same-origin', cache: 'no-store',
-      headers: { Accept: 'application/json', ...(body === undefined ? {} : { 'Content-Type': 'application/json' }) },
-      ...(body === undefined ? {} : { body: JSON.stringify(body) }),
+      headers: { Accept: binary ? 'application/zip' : 'application/json', ...(body === undefined ? {} : { 'Content-Type': zipBody ? 'application/zip' : 'application/json' }) },
+      ...(body === undefined ? {} : { body: zipBody ? body : JSON.stringify(body) }),
     })
     if (!response.ok) {
       let detail
@@ -32,7 +32,7 @@ export async function requestJSON(path, { method = 'GET', body } = {}) {
       error.requestId = detail?.requestId || response.headers?.get('X-Request-ID') || undefined
       throw error
     }
-    return await response.json()
+    return binary ? await response.blob() : await response.json()
   } catch (error) {
     // 超时只表示客户端没有收到结果，不代表服务端未保存，不能盲目重试写入。
     if (error.name === 'AbortError') throw new Error('后端请求超时，请重新读取确认保存结果')

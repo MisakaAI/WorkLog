@@ -21,6 +21,7 @@
     "@tiptap/vue-3": "^3.32.0",
     "dayjs": "^1.11.23",
     "element-plus": "^2.14.7",
+    "jszip": "^3.10.2",
     "monaco-editor": "^0.57.0",
     "vue": "^3.5.42"
   },

@@ -66,6 +66,19 @@ Vue 工作台使用完整快照 API；细粒度资源接口供其他客户端集
 - `PUT /api/projects` 默认保留省略的归档项目；若确需删除归档项目，提交完整集合并附带 `includeArchived: true`。删除仍受破坏性权限限制。
 - 项目管理的归档、取消归档及删除均在点击“保存项目”后生效。
 
+## 项目 JSON ZIP 导入导出
+
+这是项目数据交换功能，**不是** `worklog backup`：不包含数据库文件、用户凭证、版本历史、幂等记录、工作日志或待办，也不包含未分配到项目的任务。
+
+- `GET /api/projects/export`：导出当前用户全部项目（包括已归档项目）及关联任务和分类。
+- `GET /api/projects/export?projectId=ID`：只导出指定项目及其任务；归档项目同样支持，不存在返回 404。
+- 成功响应为 `application/zip`，附件名为 `worklog-projects.zip`；压缩包只有 `projects.json`，包含 `format: "worklog-projects"`、`version: 1`、`projects`、`categories`、`tasks`。项目保留 `archived` 状态，任务字段与 dashboard 一致。
+- `POST /api/projects/import`：以 `Content-Type: application/zip` 直接上传 ZIP 正文，不使用 multipart。请求上限 10 MiB，解压 JSON 上限 8 MiB；只接受上述单文件版本化格式，校验引用、分类、日期等字段，最终状态仍受工作台 8 MiB 容量预算约束。
+- 导入需要写权限，不需要删除权限。导入在当前用户的单个事务内追加项目和任务，生成新的 ID 并重映射任务归属；同名项目自动添加 ` (导入 N)` 后缀并按 40 UTF-16 码元限制截断原名。分类按忽略大小写的名称合并，不覆盖已有项目、任务、待办或工作台文字。失败时整体回滚。
+- 导入成功返回包含归档数据的 dashboard（`includeArchived: true`）和新版本；重复导入会追加新副本，不是幂等重放。超时后应重新读取确认结果，不要直接重试。
+- 项目管理中每个项目均提供导出按钮，另有“全部导出”；导出以已保存的数据为准，新建未保存项目不可导出。有后端时由后端生成 ZIP；无后端时使用 JSZip 压缩浏览器完整项目数据，格式与后端一致，可日后上传到后端导入。本地模式不展示导入按钮。
+- 导入前会确认，并提示当前项目管理中未保存的修改将被丢弃。导入成功后立即刷新项目草稿和工作台，不需要再次点击保存。
+
 ## 项目集合
 
 `GET /api/projects` 返回：
