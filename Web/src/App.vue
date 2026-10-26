@@ -252,9 +252,9 @@ function deleteTodo(id) {
   data.value.todos = data.value.todos.filter(todo => todo.id !== id)
   persist()
 }
-function onMove({ id, status, projectId }) {
+function onMove({ id, status, projectId, placement }) {
   if (persisting.value) return
-  if (moveTaskToLane(data.value, id, status, projectId)) persist()
+  if (moveTaskToLane(data.value, id, status, projectId, placement)) persist()
 }
 function resetFilters() {
   search.value = ''

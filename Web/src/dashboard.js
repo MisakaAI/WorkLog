@@ -124,14 +124,35 @@ export function projectLanes(tasks, projects, projectId = ALL_PROJECTS) {
 
 // 拖动时兼容数字和字符串 ID；仅在指定状态流转且日期为空时补入浏览器当天日期。
 // 这是界面交互规则，后端细粒度 move_task 不会自动补日期。
-export function moveTaskToLane(data, id, status, projectId) {
+// placement 指定卡片前/后的插入位置；targetId 为 null 表示目标列末尾。
+// 顺序直接存入 tasks 数组，沿用快照与数据库 position，无需新增排序字段。
+export function moveTaskToLane(data, id, status, projectId, placement) {
   if (!columns.some(column => column.id === status) || (projectId !== '' && !data.projects.some(project => project.id === projectId))) return false
   const task = data.tasks.find(task => String(task.id) === String(id))
-  if (!task || (task.status === status && task.projectId === projectId)) return false
+  if (!task) return false
+  const laneChanged = task.status !== status || task.projectId !== projectId
+  let reordered = data.tasks
+  if (placement) {
+    const remaining = data.tasks.filter(item => item !== task)
+    let index
+    if (placement.targetId === null) {
+      index = remaining.findLastIndex(item => item.status === status && item.projectId === projectId) + 1
+    } else {
+      index = remaining.findIndex(item => String(item.id) === String(placement.targetId) && item.status === status && item.projectId === projectId)
+      if (index < 0 || !['before', 'after'].includes(placement.position)) return false
+      if (placement.position === 'after') index++
+    }
+    reordered = [...remaining.slice(0, index), task, ...remaining.slice(index)]
+  }
+  const laneTasks = items => items.filter(item => item === task || (item.status === status && item.projectId === projectId))
+  const previousOrder = laneTasks(data.tasks)
+  const orderChanged = laneTasks(reordered).some((item, index) => item !== previousOrder[index])
+  if (!laneChanged && !orderChanged) return false
   if (task.status === 'planned' && status === 'progress' && !task.startDate) task.startDate = todayISO()
   if (task.status === 'progress' && status === 'done' && !task.date) task.date = todayISO()
   task.status = status
   task.projectId = projectId
+  if (orderChanged) data.tasks = reordered
   return true
 }
 

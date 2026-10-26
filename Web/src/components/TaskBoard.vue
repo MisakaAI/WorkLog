@@ -10,6 +10,31 @@ const emit = defineEmits(['edit', 'create', 'move'])
 const expanded = ref([])
 const draggedTask = ref(null)
 const dropTarget = ref('')
+const dropPlacement = ref(null)
+function previewDrop(event, lane, status) {
+  if (draggedTask.value === null) return
+  event.dataTransfer.dropEffect = 'move'
+  dropTarget.value = columnKey(lane, status)
+  const card = event.target.closest('[data-task-id]')
+  if (card && event.currentTarget.contains(card)) {
+    const bounds = card.getBoundingClientRect()
+    dropPlacement.value = { targetId: card.dataset.taskId, position: event.clientY < bounds.top + bounds.height / 2 ? 'before' : 'after' }
+  } else {
+    dropPlacement.value = { targetId: null }
+  }
+}
+function leaveColumn(event) {
+  if (!event.currentTarget.contains(event.relatedTarget)) {
+    dropTarget.value = ''
+    dropPlacement.value = null
+  }
+}
+function insertionClass(task, lane, status) {
+  if (dropTarget.value !== columnKey(lane, status) || draggedTask.value === task.id) return ''
+  if (String(dropPlacement.value?.targetId) === String(task.id)) return `drop-${dropPlacement.value.position}`
+  const tasks = lane.tasks.filter(item => item.status === status && item.id !== draggedTask.value)
+  return dropPlacement.value?.targetId === null && tasks.at(-1)?.id === task.id ? 'drop-after' : ''
+}
 const columnKey = (lane, status) => `${laneKey(lane)}:${status}`
 function startDrag(event, task) {
   draggedTask.value = task.id
@@ -19,6 +44,7 @@ function startDrag(event, task) {
 function endDrag() {
   draggedTask.value = null
   dropTarget.value = ''
+  dropPlacement.value = null
 }
 const laneKey = lane => lane.id ? `project:${lane.id}` : 'unassigned'
 // 筛选变化时保留已有分组的折叠选择，仅将新出现的分组默认展开。
@@ -35,8 +61,10 @@ const laneProgress = computed(() => new Map(props.lanes.map(lane => {
 })))
 // 子组件只发出移动意图；父组件统一校验、修改数据并保存。
 function drop(event, lane, status) {
+  if (draggedTask.value === null) return
+  previewDrop(event, lane, status)
   const id = event.dataTransfer.getData('text/plain')
-  if (id) emit('move', { id, projectId: lane.id, status })
+  if (id === String(draggedTask.value)) emit('move', { id, projectId: lane.id, status, placement: dropPlacement.value })
   endDrag()
 }
 </script>
@@ -48,14 +76,14 @@ function drop(event, lane, status) {
         <div class="lane-heading"><span class="lane-monogram" aria-hidden="true">{{ lane.name.slice(0, 1).toUpperCase() }}</span><h2>{{ lane.name }}</h2><span class="column-count">{{ lane.tasks.length }} 项任务</span></div>
       </template>
       <div v-if="view === '看板'" class="kanban-columns">
-        <section v-for="column in columns" :key="column.id" class="kanban-column" :class="{ 'is-drop-target': dropTarget === columnKey(lane, column.id) }" :aria-label="`${lane.name} · ${column.title}`" :data-status="column.id" :data-project-id="lane.id" @dragover.prevent="dropTarget = columnKey(lane, column.id)" @dragleave="!$event.currentTarget.contains($event.relatedTarget) && (dropTarget = '')" @drop.prevent="drop($event, lane, column.id)">
+        <section v-for="column in columns" :key="column.id" class="kanban-column" :class="{ 'is-drop-target': dropTarget === columnKey(lane, column.id) }" :aria-label="`${lane.name} · ${column.title}`" :data-status="column.id" :data-project-id="lane.id" @dragover.prevent="previewDrop($event, lane, column.id)" @dragleave="leaveColumn" @drop.prevent="drop($event, lane, column.id)">
           <div class="column-heading">
             <span class="status-dot" :class="column.id"></span><h3>{{ column.title }}</h3>
             <span class="column-count">{{ lane.tasks.filter(task => task.status === column.id).length }}</span>
             <ElButton text class="icon-button" :aria-label="`添加${lane.name}的${column.title}任务`" :title="`添加${column.title}任务`" @click="emit('create', { status: column.id, projectId: lane.id })"><Icon name="Add" :size="18" /></ElButton>
           </div>
           <div class="column-cards">
-            <ElCard v-for="task in lane.tasks.filter(task => task.status === column.id)" :key="task.id" class="task-card" :class="[{ 'completed-card': task.status === 'done', 'is-dragging': draggedTask === task.id }, `card-color-${task.color}`]" shadow="never" body-class="task-card-body" role="button" tabindex="0" :aria-label="`编辑任务：${task.title}`" :data-task-id="task.id" draggable="true" @dragstart="startDrag($event, task)" @dragend="endDrag" @click="emit('edit', task)" @keydown.enter.prevent="emit('edit', task)" @keydown.space.prevent="emit('edit', task)">
+            <ElCard v-for="task in lane.tasks.filter(task => task.status === column.id)" :key="task.id" class="task-card" :class="[{ 'completed-card': task.status === 'done', 'is-dragging': draggedTask === task.id }, `card-color-${task.color}`, insertionClass(task, lane, column.id)]" shadow="never" body-class="task-card-body" role="button" tabindex="0" :aria-label="`编辑任务：${task.title}`" :data-task-id="task.id" draggable="true" @dragstart="startDrag($event, task)" @dragend="endDrag" @click="emit('edit', task)" @keydown.enter.prevent="emit('edit', task)" @keydown.space.prevent="emit('edit', task)">
               <div class="card-labels"><ElTag class="tag" :class="tagClass(task.tag)" size="small">{{ task.tag }}</ElTag><ElTag class="priority" :class="priorityClass(task.priority)" size="small"><Icon v-if="['高', '极高'].includes(task.priority)" name="Flag" :size="12" />{{ task.priority }}</ElTag></div>
               <h4 class="task-title">{{ task.title }}</h4>
               <p v-if="task.description" class="task-description">{{ task.description }}</p>

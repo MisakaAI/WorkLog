@@ -316,6 +316,10 @@ main { max-width: 1540px; padding: 32px 32px 48px; margin: 0 auto; }
 .lane-heading .column-count { font-weight: 400; }
 .kanban-column.is-drop-target { border-color: var(--accent); background: var(--accent-bg); }
 .task-card.is-dragging { opacity: 0.5; }
+.task-card.drop-before, .task-card.drop-after { position: relative; }
+.task-card.drop-before::before, .task-card.drop-after::after { content: ''; position: absolute; left: 0; right: 0; height: 3px; background: var(--accent); border-radius: 2px; pointer-events: none; }
+.task-card.drop-before::before { top: 0; }
+.task-card.drop-after::after { bottom: 0; }
 .count-badge { display: inline-flex; align-items: center; justify-content: center; min-width: 26px; height: 26px; padding: 0 7px; border-radius: 8px; background: var(--surface-soft); color: var(--text-secondary); font-size: 12px; font-variant-numeric: tabular-nums; box-shadow: var(--shadow-inset); }
 .date-panel .el-date-picker__header { margin: 14px 18px 8px; }
 .date-panel .el-date-picker__header-label { font-size: 14px; font-weight: 600; }

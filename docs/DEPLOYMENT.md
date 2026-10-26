@@ -36,15 +36,28 @@ install -m 600 config.example.json /etc/worklog/config.json
 - 默认值和安全校验与环境变量模式一致。`static_dir` 设为空字符串可关闭静态服务。本地未设置 `write_token` 时仍自动生成／读取 `token_file`。
 - **所有相对路径仍以进程工作目录为基准**，不是配置文件目录。独立部署建议像上例一样使用绝对路径，并预先创建可由服务用户写入的数据目录；前端目录需包含构建好的文件。
 - 配置可能包含密码和令牌，建议文件权限 `0600`、目录权限 `0700`，仅允许服务用户访问，不要提交到版本库或放入静态目录。修改后需重启。
-- `--conf` 必须放在子命令之前，所有命令共用配置：
+- `--conf` 必须放在子命令之前，所有命令共用配置。`./bin/worklog --conf=/etc/worklog` 后面的子命令决定程序的运行模式：
+
+| 命令 | 作用与适用场景 |
+| --- | --- |
+| `serve` | 启动常驻 HTTP 服务，提供网页、REST API 和 MCP HTTP 接口；这是默认命令。会在服务启动前自动执行数据库迁移。部署常规 Web 服务使用它。 |
+| `stdio` | 启动 MCP stdio 传输，从标准输入／输出与本机 MCP 客户端通信；不是 HTTP 服务，通常由 Codex 等 MCP 客户端按需启动，协议输出占用 stdout。也会自动迁移数据库。 |
+| `migrate` | 只初始化／升级数据库结构，然后退出；适合部署时显式执行迁移，不会启动 HTTP 或 stdio 服务。 |
+| `backup PATH` | 创建 SQLite 数据库备份到指定路径，并校验备份；目标文件必须不存在。用于定期备份，不启动服务。PostgreSQL 请使用 `pg_dump`，见[运维说明](OPERATIONS.md)。 |
+| `restore PATH` | 将指定的独立 SQLite 备份恢复到配置中的数据库路径，然后退出；目标数据库及其 WAL/SHM 文件必须不存在，不会覆盖已有数据库。恢复前应停止所有写入进程。PostgreSQL 请使用 `pg_restore`。 |
+
+例如：
 
 ```sh
-./bin/worklog --conf=/etc/worklog migrate
+./bin/worklog --conf=/etc/worklog serve
 ./bin/worklog --conf=/etc/worklog stdio
+./bin/worklog --conf=/etc/worklog migrate
 ./bin/worklog --conf=/etc/worklog backup /var/backups/worklog/backup.db
 ./bin/worklog --conf=/etc/worklog restore /var/backups/worklog/backup.db
 ./bin/worklog --help
 ```
+
+不写子命令时（例如 `./bin/worklog --conf=/etc/worklog`）等同于 `serve`，会启动常驻 HTTP 服务而不是仅检查配置后退出；进程会持续运行，直到被停止。`--help` 则只显示用法并退出。
 
 配置目录通常由管理员管理；不要为了读取 `/etc/worklog` 而使用 root 运行服务。反向代理部署时，还需在 JSON 中设置 `basic_password`、`write_token`、`allowed_hosts` 和 `allowed_origins`，要求与下文环境变量相同。
 
