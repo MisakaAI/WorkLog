@@ -63,7 +63,7 @@ func load(path string) (Config, error) {
 	if path != "" {
 		get = func(_ string, def string) string { return def }
 	}
-	c := Config{Addr: get("ADDR", "127.0.0.1:8080"), Driver: get("DB_DRIVER", "sqlite"), DSN: get("DB_DSN", "./data/worklog.db"), User: get("USER_ID", "owner"), Timezone: get("TIMEZONE", "Asia/Shanghai"), StaticDir: get("STATIC_DIR", "Web/dist"), WriteToken: get("WRITE_TOKEN", ""), ReadToken: get("READ_TOKEN", ""), BasicUser: get("BASIC_USER", "worklog"), BasicPassword: get("BASIC_PASSWORD", ""), AllowedHosts: split(get("ALLOWED_HOSTS", "localhost,127.0.0.1,::1")), AllowedOrigins: split(get("ALLOWED_ORIGINS", "http://localhost:5173,http://127.0.0.1:5173")), MCPDestructive: get("MCP_ALLOW_DESTRUCTIVE", "false") == "true", TokenFile: get("TOKEN_FILE", "./data/mcp-token"), StdioReadOnly: get("STDIO_READ_ONLY", "false") == "true"}
+	c := Config{Addr: get("ADDR", "127.0.0.1:12450"), Driver: get("DB_DRIVER", "sqlite"), DSN: get("DB_DSN", "./data/worklog.db"), User: get("USER_ID", "owner"), Timezone: get("TIMEZONE", "Asia/Shanghai"), StaticDir: get("STATIC_DIR", "Web/dist"), WriteToken: get("WRITE_TOKEN", ""), ReadToken: get("READ_TOKEN", ""), BasicUser: get("BASIC_USER", "worklog"), BasicPassword: get("BASIC_PASSWORD", ""), AllowedHosts: split(get("ALLOWED_HOSTS", "localhost,127.0.0.1,::1")), AllowedOrigins: split(get("ALLOWED_ORIGINS", "http://localhost:5173,http://127.0.0.1:5173")), MCPDestructive: get("MCP_ALLOW_DESTRUCTIVE", "false") == "true", TokenFile: get("TOKEN_FILE", "./data/mcp-token"), StdioReadOnly: get("STDIO_READ_ONLY", "false") == "true"}
 	if path != "" {
 		if err := readFile(path, &c); err != nil {
 			return c, err

@@ -21,7 +21,7 @@ install -m 600 config.example.json /etc/worklog/config.json
 
 ```json
 {
-  "addr": "127.0.0.1:8080",
+  "addr": "127.0.0.1:12450",
   "db_driver": "sqlite",
   "db_dsn": "/var/lib/worklog/worklog.db",
   "static_dir": "/opt/worklog/Web/dist",
@@ -73,7 +73,7 @@ Go 不会自动读取 `.env`；本机 shell 需显式载入，Docker Compose 则
 
 | 变量 | 默认／用途 |
 | --- | --- |
-| `WORKLOG_ADDR` | `127.0.0.1:8080` |
+| `WORKLOG_ADDR` | `127.0.0.1:12450` |
 | `WORKLOG_DB_DRIVER` | `sqlite` 或 `postgres`，默认 sqlite |
 | `WORKLOG_DB_DSN` | `./data/worklog.db`；PostgreSQL 使用连接 URL |
 | `WORKLOG_USER_ID` | `owner`，仅由可信服务端设置 |
@@ -117,7 +117,7 @@ docker compose logs --tail=100 worklog
 
 - SQLite 命名卷挂载到 `/app/data`；不要用删除卷的方式更新服务。
 - 容器以 UID 10001 非 root 运行；改用 bind mount 时，预先创建目录并授予该 UID 读写权限。
-- 主机只发布 `127.0.0.1:8080`；容器内监听 `0.0.0.0:8080`，因此启动时强制要求凭证。
+- 主机只发布 `127.0.0.1:12450`；容器内监听 `0.0.0.0:12450`，因此启动时强制要求凭证。
 - 镜像包含前端与纯 Go 可执行文件，不包含 Node / Go 编译器。
 - Compose 只传递配置文件中显式列出的环境变量；其他额外选项需自行增加 environment 和相应 volume。
 - 日历固定使用前端 `work-calendar.json`，无需后端配置或环境变量。可在构建前编辑 `Web/public/work-calendar.json`，或替换发布目录中的同名文件；Docker 也可通过只读挂载替换，详见[工作日历自定义](WORK_CALENDAR.md)。
@@ -165,7 +165,7 @@ PostgreSQL 使用 advisory session lock；SQLite 升级应由一个部署启动�
 ```sh
 cp .env.example .env
 # 编辑 .env，至少设置以下内容：
-# WORKLOG_ADDR=127.0.0.1:8080
+# WORKLOG_ADDR=127.0.0.1:12450
 # WORKLOG_BASIC_USER=worklog
 # WORKLOG_BASIC_PASSWORD=<openssl rand -hex 24 生成的浏览器密码>
 # WORKLOG_WRITE_TOKEN=<另外运行 openssl rand -hex 32 生成的 MCP 写令牌>
@@ -205,7 +205,7 @@ server {
     gzip_types text/css application/javascript application/json image/svg+xml;
 
     location / {
-        proxy_pass http://127.0.0.1:8080;
+        proxy_pass http://127.0.0.1:12450;
         proxy_http_version 1.1;
         proxy_set_header Host $http_host;
         proxy_set_header Authorization $http_authorization;
@@ -227,14 +227,14 @@ sudo systemctl reload nginx
 访问 `https://worklog.example.com`，使用 `WORKLOG_BASIC_USER` / `WORKLOG_BASIC_PASSWORD` 登录浏览器认证提示框。  
 不要在 Nginx 再叠加一层 `auth_basic`：浏览器 Basic 和 MCP Bearer 均由 Go 验证，共用 `Authorization` 请求头。
 
-**禁止直接向公网开放 Go 的 8080 端口；Basic 密码和令牌必须通过 HTTPS 传输。** HTTPS Origin 必须明确加入白名单，即使代理到本机也不能省略。
+**禁止直接向公网开放 Go 的 12450 端口；Basic 密码和令牌必须通过 HTTPS 传输。** HTTPS Origin 必须明确加入白名单，即使代理到本机也不能省略。
 
 ### 部署检查
 
-1. 确认 Go 服务启动，`curl http://127.0.0.1:8080/healthz` 返回可用状态。
+1. 确认 Go 服务启动，`curl http://127.0.0.1:12450/healthz` 返回可用状态。
 2. 按上文设置 Nginx 证书、代理和请求体上限，执行 `nginx -t` 后重载。
 3. 浏览器通过 HTTPS 域名访问，确认需要 Basic 认证，任务／日志保存后刷新仍存在。
-4. 确认 Go 8080 端口没有对公网发布，并使用 MCP 客户端验证 Bearer 通道。
+4. 确认 Go 12450 端口没有对公网发布，并使用 MCP 客户端验证 Bearer 通道。
 5. 在入口配置适当的请求限速／认证失败防护，不要把应用业务预算当作防暴力破解。
 
 应用最大请求体为工作台 10 MiB、日志 1 MiB、MCP envelope 2 MiB；  
@@ -261,11 +261,11 @@ proxy_read_timeout 30s;
 location = /worklog { return 301 /worklog/; }
 location /worklog/ {
     # 尾部 / 用于剥离 /worklog/ 前缀。
-    proxy_pass http://127.0.0.1:8080/;
+    proxy_pass http://127.0.0.1:12450/;
 }
-location /api/ { proxy_pass http://127.0.0.1:8080; }
-location = /mcp { proxy_pass http://127.0.0.1:8080; }
-location = /healthz { proxy_pass http://127.0.0.1:8080; }
+location /api/ { proxy_pass http://127.0.0.1:12450; }
+location = /mcp { proxy_pass http://127.0.0.1:12450; }
+location = /healthz { proxy_pass http://127.0.0.1:12450; }
 location / { return 404; }
 ```
 

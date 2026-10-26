@@ -12,7 +12,7 @@ cd Web
 VITE_API_BASE_URL=/api npm run dev
 ```
 
-Vite 将 `/api` 代理到 `127.0.0.1:8080`。不要将开发服务器公开到互联网。
+Vite 将 `/api` 代理到 `127.0.0.1:12450`。不要将开发服务器公开到互联网。
 
 ## 代码结构
 
@@ -95,10 +95,10 @@ npm run build
 # 项目根目录；使用新的临时目录避免读取旧测试数据。
 TEST_DIR="$(mktemp -d)"
 WORKLOG_DB_DSN="$TEST_DIR/worklog.db" WORKLOG_TOKEN_FILE="$TEST_DIR/mcp-token" \
-  WORKLOG_ADDR=127.0.0.1:18080 ./bin/worklog
+  WORKLOG_ADDR=127.0.0.1:22450 ./bin/worklog
 # 另一终端：
 cd Web
-WORKLOG_TEST_API_URL=http://127.0.0.1:18080/api npm run test:backend
+WORKLOG_TEST_API_URL=http://127.0.0.1:22450/api npm run test:backend
 ```
 
 使用干净的开发环境，避免继承生产 Basic、DSN、Host / Origin 等配置影响测试；结束后停止进程并移除临时目录。

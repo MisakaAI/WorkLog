@@ -33,7 +33,7 @@ func TestLoadFileIgnoresEnvironment(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		if c.Addr != "127.0.0.1:8080" || c.Driver != "sqlite" || c.Timezone != "Asia/Shanghai" || !c.Local || !c.StdioReadOnly || c.MCPDestructive || c.StaticDir != "" || c.TokenFile != token || len(c.WriteToken) != 64 || len(c.AllowedHosts) != 1 || len(c.AllowedOrigins) != 0 {
+		if c.Addr != "127.0.0.1:12450" || c.Driver != "sqlite" || c.Timezone != "Asia/Shanghai" || !c.Local || !c.StdioReadOnly || c.MCPDestructive || c.StaticDir != "" || c.TokenFile != token || len(c.WriteToken) != 64 || len(c.AllowedHosts) != 1 || len(c.AllowedOrigins) != 0 {
 			t.Fatal("file settings/defaults not applied correctly")
 		}
 	}
@@ -48,7 +48,7 @@ func TestLoadFileRejectsInvalidConfiguration(t *testing.T) {
 	for _, input := range []string{
 		`{"unknown_secret":"do-not-log"}`, `{"addr":123}`, `{"stdio_read_only":"true"}`,
 		`{`, `null`, `[]`, `{} {}`, `{} trailing`,
-		`{"addr":"0.0.0.0:8080"}`, `{"timezone":"invalid"}`,
+		`{"addr":"0.0.0.0:12450"}`, `{"timezone":"invalid"}`,
 		`{"write_token":"short"}`, `{"db_driver":"other"}`,
 	} {
 		t.Run(input, func(t *testing.T) {

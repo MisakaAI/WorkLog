@@ -9,7 +9,7 @@ import (
 )
 
 func TestConcurrentFirstLoad(t *testing.T) {
-	t.Setenv("WORKLOG_ADDR", "127.0.0.1:8080")
+	t.Setenv("WORKLOG_ADDR", "127.0.0.1:12450")
 	t.Setenv("WORKLOG_BASIC_PASSWORD", "")
 	t.Setenv("WORKLOG_WRITE_TOKEN", "")
 	t.Setenv("WORKLOG_READ_TOKEN", "")

@@ -16,7 +16,7 @@ try {
   execFileSync('go', ['build', '-o', bin, './cmd/worklog'], { cwd: root, stdio: 'inherit' })
   child = spawn(bin, [], { cwd: root, stdio: 'inherit', env: {
     ...process.env,
-    WORKLOG_ADDR: `127.0.0.1:${process.env.WORKLOG_E2E_PORT || '18080'}`,
+    WORKLOG_ADDR: `127.0.0.1:${process.env.WORKLOG_E2E_PORT || '22450'}`,
     WORKLOG_DB_DRIVER: 'sqlite', WORKLOG_DB_DSN: join(dir, 'smoke.db'),
     WORKLOG_WRITE_TOKEN: randomBytes(32).toString('hex'), WORKLOG_READ_TOKEN: '',
     WORKLOG_BASIC_PASSWORD: '', WORKLOG_USER_ID: 'smoke', WORKLOG_TIMEZONE: 'Asia/Shanghai',

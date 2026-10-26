@@ -22,10 +22,10 @@ npm run preview
 正式部署可使用 Nginx、Caddy 或任何静态 HTTP 服务；本地也可使用：
 
 ```sh
-python3 -m http.server 8080 --directory dist
+python3 -m http.server 12450 --directory dist
 ```
 
-浏览器打开 `http://localhost:8080`。  
+浏览器打开 `http://localhost:12450`。  
 创建持久业务 ID 优先使用 `crypto.randomUUID`，LAN HTTP 下回退到 `crypto.getRandomValues`；  
 若浏览器连安全随机源也不支持，会显示错误而不会生成弱随机业务 ID。  
 构建使用相对资源路径，可部署在站点根目录或 `/worklog/` 等子目录。  
@@ -70,8 +70,8 @@ python3 ico.py
 ### 2. 后端模式
 
 仓库根目录已提供可运行的 Go / SQLite / PostgreSQL 后端和 MCP Server，配置、认证、备份及部署见 [后端 README](../README.md)。  
-构建本前端后在根目录启动 Go 程序，即可通过 `http://127.0.0.1:8080` 使用同源 `/api`；Go 提供的 `config.js` 会自动选择真实后端。  
-开发时运行后端，再使用 `VITE_API_BASE_URL=/api npm run dev`，Vite 会将 `/api` 代理到本机 8080 端口。
+构建本前端后在根目录启动 Go 程序，即可通过 `http://127.0.0.1:12450` 使用同源 `/api`；Go 提供的 `config.js` 会自动选择真实后端。  
+开发时运行后端，再使用 `VITE_API_BASE_URL=/api npm run dev`，Vite 会将 `/api` 代理到本机 12450 端口。
 
 将 **API 基础 URL（包含 `/api` 等前缀）** 配置为以下任一种方式：
 

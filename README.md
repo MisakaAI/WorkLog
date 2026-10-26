@@ -22,7 +22,7 @@ go build -o bin/worklog ./cmd/worklog
 ./bin/worklog
 ```
 
-打开 **http://127.0.0.1:8080** 即可使用。Go 服务同时提供前端静态文件、`/api` 和 `/mcp`，无需单独启动前端服务器。
+打开 **http://127.0.0.1:12450** 即可使用。Go 服务同时提供前端静态文件、`/api` 和 `/mcp`，无需单独启动前端服务器。
 
 首次启动自动创建 `data/worklog.db`、执行迁移并生成 MCP 令牌文件 `data/mcp-token`，不注入示例业务数据。  
 请从项目根目录运行，默认配置使用相对路径。SQLite 数据应放在本机磁盘，不要放在 NFS / SMB 上。

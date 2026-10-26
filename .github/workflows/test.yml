@@ -50,11 +50,11 @@ jobs:
           trap 'kill "$server"; wait "$server" || true' EXIT
           ready=false
           for i in $(seq 1 90); do
-            if curl --fail --silent http://127.0.0.1:18080/healthz >/dev/null; then ready=true; break; fi
+            if curl --fail --silent http://127.0.0.1:22450/healthz >/dev/null; then ready=true; break; fi
             sleep 1
           done
           if [ "$ready" != true ]; then cat /tmp/worklog-adapter.log; exit 1; fi
-          WORKLOG_TEST_API_URL=http://127.0.0.1:18080/api npm run test:backend
+          WORKLOG_TEST_API_URL=http://127.0.0.1:22450/api npm run test:backend
       - uses: actions/upload-artifact@v4
         if: failure()
         with:

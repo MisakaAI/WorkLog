@@ -154,15 +154,15 @@ Vue 工作台使用完整快照 API；细粒度资源接口供其他客户端集
 以下适用于本地默认模式，远程需额外使用 `-u worklog:...` 或安全注入的 Bearer 头：
 
 ```sh
-curl -s http://127.0.0.1:8080/api/dashboard
-curl -s http://127.0.0.1:8080/api/today
-curl -s -X POST http://127.0.0.1:8080/api/tasks \
+curl -s http://127.0.0.1:12450/api/dashboard
+curl -s http://127.0.0.1:12450/api/today
+curl -s -X POST http://127.0.0.1:12450/api/tasks \
   -H 'Content-Type: application/json' -H 'Idempotency-Key: unique-request-001' \
   -d '{"title":"实现后端","status":"progress"}'
 # 使用实际返回的 ID 和当前 version：
-curl -s -X PATCH http://127.0.0.1:8080/api/tasks/REAL_ID \
+curl -s -X PATCH http://127.0.0.1:12450/api/tasks/REAL_ID \
   -H 'Content-Type: application/json' -d '{"version":1,"status":"done"}'
-curl -s -X PUT http://127.0.0.1:8080/api/worklog/2026-10-21 \
+curl -s -X PUT http://127.0.0.1:12450/api/worklog/2026-10-21 \
   -H 'Content-Type: application/json' \
   -d '{"version":0,"content":{"type":"doc","content":[{"type":"paragraph","content":[{"type":"text","text":"完成后端联调"}]}]}}'
 ```

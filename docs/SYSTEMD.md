@@ -55,7 +55,7 @@ sudoedit /etc/worklog/config.json
 
 ```json
 {
-  "addr": "127.0.0.1:8080",
+  "addr": "127.0.0.1:12450",
   "db_driver": "sqlite",
   "db_dsn": "/var/lib/worklog/worklog.db",
   "static_dir": "/opt/worklog/Web/dist",
@@ -89,7 +89,7 @@ sudoedit /etc/worklog/config.json
 代理应保留网站实际 `Host`。`allowed_hosts` 不带协议和端口；`allowed_origins` 使用浏览器访问的完整 Origin，不带路径或结尾 `/`，无需填写 Cloudflare Access 的登录域名。
 TLS 在代理终止、上游使用 HTTP 时，也要显式加入网站的 HTTPS Origin；不要只依赖 `X-Forwarded-Proto`。
 
-Go 默认仅监听本机地址，不要直接向公网开放 8080。Nginx 配置见[部署与配置](DEPLOYMENT.md#nginx-https-反向代理)。
+Go 默认仅监听本机地址，不要直接向公网开放 12450。Nginx 配置见[部署与配置](DEPLOYMENT.md#nginx-https-反向代理)。
 Cloudflare Tunnel 若不在同一主机网络空间，需按实际网络调整监听地址；非回环监听必须显式配置写令牌和 Basic 密码。
 
 ## 3. 安装并启动服务
@@ -108,7 +108,7 @@ sudo systemctl status worklog.service --no-pager
 检查健康状态和日志：
 
 ```sh
-curl --fail http://127.0.0.1:8080/healthz
+curl --fail http://127.0.0.1:12450/healthz
 sudo journalctl -u worklog.service -n 100 --no-pager
 sudo journalctl -u worklog.service -f
 ```
@@ -116,7 +116,7 @@ sudo journalctl -u worklog.service -f
 如果删除了 `allowed_hosts` 中的本机地址，健康检查也要使用允许的 Host，例如：
 
 ```sh
-curl --fail -H 'Host: worklog.example.com' http://127.0.0.1:8080/healthz
+curl --fail -H 'Host: worklog.example.com' http://127.0.0.1:12450/healthz
 ```
 
 服务日志写入 journald，不在数据目录生成日志文件。日志是否跨主机重启保留，取决于主机 journald 的持久化与轮转配置。

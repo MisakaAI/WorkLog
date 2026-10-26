@@ -20,13 +20,13 @@ RUN apk add --no-cache ca-certificates && \
 WORKDIR /app
 COPY --from=backend /worklog /app/worklog
 COPY --from=web /src/Web/dist/ /app/web/
-ENV WORKLOG_ADDR=0.0.0.0:8080 \
+ENV WORKLOG_ADDR=0.0.0.0:12450 \
     WORKLOG_DB_DSN=/app/data/worklog.db \
     WORKLOG_TOKEN_FILE=/app/data/mcp-token \
     WORKLOG_STATIC_DIR=/app/web
 USER 10001:10001
 VOLUME ["/app/data"]
-EXPOSE 8080
-HEALTHCHECK --interval=30s --timeout=3s --start-period=10s --retries=3 CMD wget -q -O /dev/null http://127.0.0.1:8080/healthz || exit 1
+EXPOSE 12450
+HEALTHCHECK --interval=30s --timeout=3s --start-period=10s --retries=3 CMD wget -q -O /dev/null http://127.0.0.1:12450/healthz || exit 1
 ENTRYPOINT ["/app/worklog"]
 CMD ["serve"]

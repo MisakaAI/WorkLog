@@ -21,7 +21,7 @@ codex
 
 ```toml
 [mcp_servers.worklog]
-url = "http://127.0.0.1:8080/mcp"
+url = "http://127.0.0.1:12450/mcp"
 bearer_token_env_var = "WORKLOG_MCP_TOKEN"
 ```
 
@@ -32,7 +32,7 @@ bearer_token_env_var = "WORKLOG_MCP_TOKEN"
 
 ```json
 {
-  "url": "http://127.0.0.1:8080/mcp",
+  "url": "http://127.0.0.1:12450/mcp",
   "headers": { "Authorization": "Bearer <从客户端安全环境注入，不要提交到仓库>" }
 }
 ```

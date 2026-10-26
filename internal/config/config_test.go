@@ -10,7 +10,7 @@ import (
 func TestDefaultsAndTokenPermissions(t *testing.T) {
 	dir := t.TempDir()
 	t.Setenv("WORKLOG_TOKEN_FILE", filepath.Join(dir, "private", "token"))
-	t.Setenv("WORKLOG_ADDR", "127.0.0.1:8080")
+	t.Setenv("WORKLOG_ADDR", "127.0.0.1:12450")
 	t.Setenv("WORKLOG_WRITE_TOKEN", "")
 	t.Setenv("WORKLOG_READ_TOKEN", "")
 	c, e := Load()
@@ -32,7 +32,7 @@ func TestDefaultsAndTokenPermissions(t *testing.T) {
 	}
 }
 func TestBasicPasswordLength(t *testing.T) {
-	for _, addr := range []string{"127.0.0.1:8080", "0.0.0.0:8080"} {
+	for _, addr := range []string{"127.0.0.1:12450", "0.0.0.0:12450"} {
 		for _, length := range []int{0, 7, 8} {
 			t.Run(addr+"/"+strings.Repeat("p", length), func(t *testing.T) {
 				t.Setenv("WORKLOG_ADDR", addr)
@@ -40,7 +40,7 @@ func TestBasicPasswordLength(t *testing.T) {
 				t.Setenv("WORKLOG_READ_TOKEN", "")
 				t.Setenv("WORKLOG_BASIC_PASSWORD", strings.Repeat("p", length))
 				_, err := Load()
-				wantError := length == 7 || (length == 0 && addr == "0.0.0.0:8080")
+				wantError := length == 7 || (length == 0 && addr == "0.0.0.0:12450")
 				if (err != nil) != wantError {
 					t.Fatalf("length=%d: error=%v, wantError=%v", length, err, wantError)
 				}
@@ -50,7 +50,7 @@ func TestBasicPasswordLength(t *testing.T) {
 }
 
 func TestRemoteConfiguration(t *testing.T) {
-	t.Setenv("WORKLOG_ADDR", "0.0.0.0:8080")
+	t.Setenv("WORKLOG_ADDR", "0.0.0.0:12450")
 	t.Setenv("WORKLOG_WRITE_TOKEN", "")
 	t.Setenv("WORKLOG_BASIC_PASSWORD", "")
 	if _, e := Load(); e == nil {

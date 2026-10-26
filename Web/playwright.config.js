@@ -1,6 +1,6 @@
 import { defineConfig, devices } from '@playwright/test'
 
-const port = process.env.WORKLOG_E2E_PORT || '18080'
+const port = process.env.WORKLOG_E2E_PORT || '22450'
 export default defineConfig({
   testDir: './tests/e2e',
   workers: 1,

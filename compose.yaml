@@ -4,9 +4,9 @@ services:
     image: worklog:local
     restart: unless-stopped
     ports:
-      - "127.0.0.1:8080:8080"
+      - "127.0.0.1:12450:12450"
     environment:
-      WORKLOG_ADDR: 0.0.0.0:8080
+      WORKLOG_ADDR: 0.0.0.0:12450
       WORKLOG_DB_DRIVER: sqlite
       WORKLOG_DB_DSN: /app/data/worklog.db
       WORKLOG_TIMEZONE: ${WORKLOG_TIMEZONE:-Asia/Shanghai}
@@ -16,7 +16,7 @@ services:
       WORKLOG_BASIC_USER: ${WORKLOG_BASIC_USER:-worklog}
       WORKLOG_BASIC_PASSWORD: ${WORKLOG_BASIC_PASSWORD:?Set an 8+ byte browser password in .env}
       WORKLOG_ALLOWED_HOSTS: ${WORKLOG_ALLOWED_HOSTS:-localhost,127.0.0.1}
-      WORKLOG_ALLOWED_ORIGINS: ${WORKLOG_ALLOWED_ORIGINS:-http://localhost:8080,http://127.0.0.1:8080}
+      WORKLOG_ALLOWED_ORIGINS: ${WORKLOG_ALLOWED_ORIGINS:-http://localhost:12450,http://127.0.0.1:12450}
       WORKLOG_MCP_ALLOW_DESTRUCTIVE: ${WORKLOG_MCP_ALLOW_DESTRUCTIVE:-false}
     volumes:
       - worklog-data:/app/data

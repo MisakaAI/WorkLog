@@ -27,7 +27,7 @@ func TestActualStdioCommand(t *testing.T) {
 	}
 	path := filepath.Join(dir, "stdio.db")
 	command := exec.CommandContext(ctx, binary, "stdio")
-	command.Env = append(os.Environ(), "WORKLOG_ADDR=127.0.0.1:8080", "WORKLOG_DB_DRIVER=sqlite", "WORKLOG_DB_DSN="+path, "WORKLOG_TOKEN_FILE="+filepath.Join(dir, "token"), "WORKLOG_WRITE_TOKEN=", "WORKLOG_READ_TOKEN=", "WORKLOG_MCP_ALLOW_DESTRUCTIVE=false", "WORKLOG_STDIO_READ_ONLY=false")
+	command.Env = append(os.Environ(), "WORKLOG_ADDR=127.0.0.1:12450", "WORKLOG_DB_DRIVER=sqlite", "WORKLOG_DB_DSN="+path, "WORKLOG_TOKEN_FILE="+filepath.Join(dir, "token"), "WORKLOG_WRITE_TOKEN=", "WORKLOG_READ_TOKEN=", "WORKLOG_MCP_ALLOW_DESTRUCTIVE=false", "WORKLOG_STDIO_READ_ONLY=false")
 	client := mcp.NewClient(&mcp.Implementation{Name: "stdio-test", Version: "1"}, nil)
 	session, e := client.Connect(ctx, &mcp.CommandTransport{Command: command}, nil)
 	must(t, e)
