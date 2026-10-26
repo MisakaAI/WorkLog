@@ -61,10 +61,10 @@ Vue 工作台使用完整快照 API；细粒度资源接口供其他客户端集
 
 - 项目新增布尔字段 `archived`，历史项目默认 `false`。归档不删除项目或关联任务。
 - `GET /api/dashboard` 默认只返回未归档项目及其任务；`GET /api/dashboard?includeArchived=true` 返回全部数据，并携带 `includeArchived: true`。
-- `PUT /api/dashboard` 普通快照保存会保留未下发的归档项目和任务。管理归档数据时应先读取完整快照，再携带 `includeArchived: true` 和当前 `revision` 保存；设置项目 `archived: true/false` 即归档／取消归档。完整快照中删除项目时仍需将其任务移至未分配。
+- `PUT /api/dashboard` 普通快照保存会保留未下发的归档项目和任务。管理归档数据时应先读取完整快照，再携带 `includeArchived: true` 和当前 `revision` 保存；设置项目 `archived: true/false` 即归档／取消归档。完整快照中删除项目时，客户端需同时移除其所有关联任务。
 - `GET /api/projects` 默认隐藏归档项目，使用 `?includeArchived=true` 可读取全部；默认任务列表及摘要也排除归档项目的任务。
 - `PUT /api/projects` 默认保留省略的归档项目；若确需删除归档项目，提交完整集合并附带 `includeArchived: true`。删除仍受破坏性权限限制。
-- 项目管理的归档、取消归档及删除均在点击“保存项目”后生效。
+- 项目管理删除前需输入完整项目名称进行二次确认，名称匹配由前端校验，不增加 API 参数。确认后立即提交项目及其所有任务的删除，无需点击“保存”，取消管理弹窗也不会撤销删除。删除使用已保存的完整快照，不顺带提交其他项目草稿；成功后更新快照版本，归档、取消归档等其他修改仍需点击“保存”生效。
 
 ## 项目 JSON ZIP 导入导出
 
@@ -93,7 +93,7 @@ Vue 工作台使用完整快照 API；细粒度资源接口供其他客户端集
 {"projectRevision":1,"projects":[{"id":"client-uuid","name":"新名称"}]}
 ```
 
-遗漏的项目被删除，其任务在同一事务内移至 `projectId: ""`，不会删除任务。删除项目受破坏性权限限制。
+遗漏的项目及其所有关联任务在同一事务内删除，其他项目和未分配任务不受影响。删除项目受破坏性权限限制。
 
 ## 分类集合
 

@@ -3,6 +3,7 @@ import assert from 'node:assert/strict'
 import { readFileSync, readdirSync } from 'node:fs'
 import { getDashboard, saveDashboard, emptyDashboard, DASHBOARD_KEY } from '../src/api/index.js'
 import { getBackendURL, requestJSON } from '../src/api/client.js'
+import { replaceProjects } from '../src/dashboard.js'
 
 function setup(t) {
   const storage = new Map()
@@ -51,12 +52,10 @@ test('本地归档默认隐藏，普通保存不丢失归档任务，可恢复�
   const restored = await getDashboard({ includeArchived: true })
   restored.projects[0].archived = true
   await saveDashboard(restored)
-  const deleted = await getDashboard({ includeArchived: true })
-  deleted.projects = []
-  deleted.tasks[0].projectId = ''
+  const deleted = replaceProjects(await getDashboard({ includeArchived: true }), [])
   await saveDashboard(deleted)
   assert.equal((await getDashboard()).projects.length, 0)
-  assert.equal((await getDashboard()).tasks[0].projectId, '')
+  assert.deepEqual((await getDashboard()).tasks, [])
 })
 
 test('远端模式不读取/写入本地数据，快照 GET/PUT 路径与版本一致', async t => {

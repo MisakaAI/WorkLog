@@ -33,16 +33,14 @@ func TestProjectArchive(t *testing.T) {
 	if len(restored.Projects) != 1 || len(restored.Tasks) != 2 {
 		t.Fatal(restored)
 	}
-	// 已归档项目仍可删除，任务只解除归属。
+	// 已归档项目仍可删除，完整快照同时移除其所有任务。
 	restored.Projects[0].Archived = true
 	httpOK(t, f, "PUT", "/api/dashboard", restored)
 	full = typed[domain.Dashboard](t, httpOK(t, f, "GET", "/api/dashboard?includeArchived=true", nil))
 	full.Projects = []domain.Project{}
-	for i := range full.Tasks {
-		full.Tasks[i].ProjectID = ""
-	}
+	full.Tasks = []domain.Task{}
 	deleted := typed[domain.Dashboard](t, httpOK(t, f, "PUT", "/api/dashboard", full))
-	if len(deleted.Projects) != 0 || len(deleted.Tasks) != 2 {
+	if len(deleted.Projects) != 0 || len(deleted.Tasks) != 0 {
 		t.Fatal(deleted)
 	}
 }

@@ -238,20 +238,12 @@ func suite(t *testing.T, driver string) {
 		_, e = f.svc.SaveDashboard(ctx, owner, saved)
 		status(t, e, 409)
 	})
-	t.Run("ProjectMigrationCategorySwapsAndRollback", func(t *testing.T) {
+	t.Run("ProjectDeletion", func(t *testing.T) { testProjectDeletion(t, driver) })
+	t.Run("CategorySwapsAndRollback", func(t *testing.T) {
 		f := setup(t, driver)
 		_, e := f.svc.SaveDashboard(ctx, owner, snapshotFixture())
 		must(t, e)
-		result := typed[service.CollectionResult](t, invoke(t, f, owner, "delete_project", service.DeleteProject{ID: "p", ExpectedRevision: 1}))
-		if len(result.UpdatedTasks) != 2 || len(result.Projects) != 0 {
-			t.Fatal(result)
-		}
-		for _, t1 := range result.UpdatedTasks {
-			if t1.ProjectID != "" || t1.Version != 2 {
-				t.Fatal(t1)
-			}
-		}
-		result = typed[service.CollectionResult](t, invoke(t, f, owner, "manage_categories", service.CategoryChange{ExpectedRevision: 1, Categories: []service.CategoryDraft{{OriginalName: "A", Name: "B"}, {OriginalName: "B", Name: "A"}}}))
+		result := typed[service.CollectionResult](t, invoke(t, f, owner, "manage_categories", service.CategoryChange{ExpectedRevision: 1, Categories: []service.CategoryDraft{{OriginalName: "A", Name: "B"}, {OriginalName: "B", Name: "A"}}}))
 		if len(result.UpdatedTasks) != 2 || result.UpdatedTasks[0].Tag != "B" || result.UpdatedTasks[1].Tag != "A" {
 			t.Fatal(result)
 		}

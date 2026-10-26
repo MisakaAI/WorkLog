@@ -558,11 +558,9 @@ func mutate(op string, raw json.RawMessage, st *domain.State) (mutation, error) 
 		for _, p := range st.Projects {
 			valid[p.ID] = true
 		}
-		for i := range st.Tasks {
-			if !valid[st.Tasks[i].ProjectID] {
-				st.Tasks[i].ProjectID = ""
-			}
-		}
+		st.Tasks = slices.DeleteFunc(st.Tasks, func(t domain.Task) bool {
+			return t.ProjectID != "" && !valid[t.ProjectID]
+		})
 	case "create_project":
 		in, e := decode[CreateProject](raw, "expectedRevision", "name", "idempotencyKey")
 		if e != nil {
@@ -598,11 +596,9 @@ func mutate(op string, raw json.RawMessage, st *domain.State) (mutation, error) 
 			return fail(domain.NotFound())
 		}
 		st.Projects = append(st.Projects[:i], st.Projects[i+1:]...)
-		for i := range st.Tasks {
-			if st.Tasks[i].ProjectID == in.ID {
-				st.Tasks[i].ProjectID = ""
-			}
-		}
+		st.Tasks = slices.DeleteFunc(st.Tasks, func(t domain.Task) bool {
+			return t.ProjectID == in.ID
+		})
 	case "reorder_projects":
 		in, e := decode[ReorderProjects](raw, "expectedRevision", "ids")
 		if e != nil {

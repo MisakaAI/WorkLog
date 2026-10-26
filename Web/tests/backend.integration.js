@@ -5,6 +5,7 @@ import { randomUUID } from 'node:crypto'
 import { JSDOM } from 'jsdom'
 import { parseWorklogHTML } from '../src/worklogEditor.js'
 import { getDashboard, saveDashboard } from '../src/api/index.js'
+import { replaceProjects } from '../src/dashboard.js'
 import { getTodayWorklog, getWorklog, saveWorklog, getWorklogDates } from '../src/api/worklog.js'
 import { requestJSON } from '../src/api/client.js'
 
@@ -29,8 +30,9 @@ test('real Vue API adapters: snapshot, granular concurrent write, log format/ver
   await assert.rejects(saveDashboard(saved), error => error.status === 409)
   const latest = await getDashboard()
   assert.equal(latest.tasks.length, 2, 'Conflict must not overwrite server changes')
-  const migrated = await saveDashboard({ ...latest, projects: [], tasks: latest.tasks.map(item => ({ ...item, projectId: '' })) })
-  assert.ok(migrated.tasks.every(item => item.projectId === ''))
+  const deleted = await saveDashboard(replaceProjects(latest, []))
+  assert.deepEqual(deleted.tasks.map(item => item.id), [created.id])
+  assert.equal(deleted.tasks[0].projectId, '')
   const today = await getTodayWorklog()
   assert.match(today.date, /^\d{4}-\d{2}-\d{2}$/)
   const date = '2098-12-30'

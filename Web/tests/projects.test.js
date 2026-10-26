@@ -95,14 +95,14 @@ test('其他状态转换、同状态跨项目以及无效拖拽不补填日期',
   }
 })
 
-test('重命名不改变任务归属，删除项目只将任务移至未分配，保存后可恢复', () => {
+test('重命名不改变任务归属，删除项目同步删除其任务且不影响其他项目和未分配任务', () => {
   const data = fixture()
   const renamed = replaceProjects(data, [{ id: 'a', name: '新名称' }, data.projects[1]])
   assert.equal(renamed.tasks[0].projectId, 'a')
   const deleted = replaceProjects(renamed, [renamed.projects[1]])
-  assert.equal(deleted.tasks.length, 3)
-  assert.equal(deleted.tasks[0].projectId, '')
-  assert.equal(deleted.tasks[1].projectId, 'b')
+  assert.deepEqual(deleted.tasks, [data.tasks[1], data.tasks[2]])
+  assert.deepEqual(replaceProjects(data, []).tasks, [data.tasks[2]])
+  assert.equal(data.tasks.length, 3)
   assert.deepEqual(parseDashboard(JSON.parse(JSON.stringify(deleted))), deleted)
 })
 

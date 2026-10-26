@@ -282,6 +282,36 @@ function addDraftProject() {
   showArchivedProjects.value = false
   newProjectName.value = ''
 }
+async function deleteDraftProject(project) {
+  if (persisting.value || transferringProjects.value) return
+  const name = project.name.trim()
+  if (!name) return ElMessage.warning('请先填写项目名称')
+  try {
+    const { value } = await ElMessageBox.prompt(`删除项目“${name}”将立即删除该项目及其所有任务，删除后无法恢复。请输入项目名称以确认删除：`, '删除项目', {
+      confirmButtonText: '删除', cancelButtonText: '取消', type: 'warning',
+      inputPlaceholder: name,
+      inputValidator: value => value === name || '项目名称不匹配，请输入完整的项目名称',
+    })
+    if (value !== name || persisting.value || transferringProjects.value || !projectDialog.value) return
+  } catch { return }
+  // 只提交已保存快照中的删除，不顺带保存其他项目的草稿修改。
+  const snapshot = projectSnapshot.value
+  if (snapshot.projects.some(item => item.id === project.id)) {
+    persisting.value = true
+    try {
+      const saved = await saveDashboard(replaceProjects(snapshot, snapshot.projects.filter(item => item.id !== project.id)))
+      projectSnapshot.value = saved
+      data.value = visibleDashboard(saved)
+      committed = JSON.parse(JSON.stringify(data.value))
+      if (selectedProject.value === project.id) selectedProject.value = ALL_PROJECTS
+    } catch (e) {
+      ElMessage.error(`删除失败：${e.message}`)
+      return
+    } finally { persisting.value = false }
+  }
+  resetProjectDrag()
+  draftProjects.value = draftProjects.value.filter(item => item.id !== project.id)
+}
 async function saveProjects() {
   if (persisting.value || transferringProjects.value) return
   if (newProjectName.value.trim()) addDraftProject()
@@ -453,7 +483,7 @@ onMounted(load)
       </ElDialog>
 
       <ElDialog v-model="projectDialog" title="项目管理" width="min(620px, 92vw)" @closed="resetProjectDrag">
-        <p class="project-help">拖动排序手柄调整项目顺序。归档后项目及其任务不再展示，可在“已归档”中恢复。删除项目不会删除任务，任务会移至“未分配”。修改后点击保存生效。导出仅包含已保存的项目、关联任务和分类，不包含未分配任务、待办或工作日志。</p>
+        <p class="project-help">拖动排序手柄调整项目顺序。归档后项目及其任务不再展示，可在“已归档”中恢复。删除项目需输入项目名称确认，确认后立即删除项目及其所有任务，无法恢复，取消项目管理也不会撤销删除。其他修改点击保存后生效。导出仅包含已保存的项目、关联任务和分类，不包含未分配任务、待办或工作日志。</p>
         <div v-if="hasBackend" class="project-transfer-actions">
           <ElButton v-if="hasBackend" :disabled="transferringProjects || persisting" @click="projectImportInput?.click()"><RiDownload2Line :size="17" aria-hidden="true" />导入项目</ElButton>
           <input v-if="hasBackend" ref="projectImportInput" type="file" accept=".zip,application/zip" aria-label="选择项目 ZIP 文件" hidden @change="uploadProjects" />
@@ -471,7 +501,7 @@ onMounted(load)
               <div class="project-row-actions">
                 <ElButton text :aria-label="`${project.archived ? '取消归档' : '归档'}项目：${project.name}`" :title="project.archived ? '取消归档' : '归档'" @click="toggleProjectArchive(project)"><RiInboxUnarchiveLine v-if="project.archived" size="17" aria-hidden="true" /><RiInboxArchiveLine v-else size="17" aria-hidden="true" /></ElButton>
                 <ElButton text :disabled="transferringProjects || persisting || !projectSnapshot.projects.some(item => item.id === project.id)" :aria-label="`导出项目：${project.name}`" title="导出项目" @click="downloadProject(project.id)"><RiUpload2Line size="17" aria-hidden="true" /></ElButton>
-                <ElButton text type="danger" :aria-label="`删除项目：${project.name}`" title="删除项目" @click="draftProjects = draftProjects.filter(item => item.id !== project.id)"><Icon name="Delete" :size="17" /></ElButton>
+                <ElButton text type="danger" :disabled="transferringProjects || persisting" :aria-label="`删除项目：${project.name}`" title="删除项目" @click="deleteDraftProject(project)"><Icon name="Delete" :size="17" /></ElButton>
               </div>
             </div>
             <ElEmpty v-if="!visibleDraftProjects.length" :image-size="48" :description="showArchivedProjects ? '暂无已归档项目。' : '暂无进行中的项目。'" />

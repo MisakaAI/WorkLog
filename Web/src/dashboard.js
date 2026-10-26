@@ -96,13 +96,13 @@ export function parseDashboard(value) {
   return value
 }
 
-// 删除项目只解除任务归属，不删除任务本身。
+// 删除项目时同步删除其任务，保留其他项目及未分配任务。
 export function replaceProjects(data, projects) {
   const projectIds = new Set(projects.map(project => project.id))
   return {
     ...data,
     projects: projects.map(project => ({ ...project, name: project.name.trim() })),
-    tasks: data.tasks.map(task => projectIds.has(task.projectId) || task.projectId === '' ? task : { ...task, projectId: '' }),
+    tasks: data.tasks.filter(task => task.projectId === '' || projectIds.has(task.projectId)),
   }
 }
 
