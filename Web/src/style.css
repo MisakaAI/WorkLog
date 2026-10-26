@@ -50,6 +50,8 @@ a:focus-visible, button:focus-visible, [role='button']:focus-visible, .el-button
 .topbar { display: flex; align-items: center; gap: 24px; min-height: 76px; padding: 0 max(32px, calc((100vw - 1476px) / 2)); border-bottom: 1px solid var(--edge-light); background: var(--page); }
 .brand { display: inline-flex; align-items: center; gap: 11px; font-size: 25px; line-height: var(--line-height-tight); font-weight: var(--font-weight-bold); letter-spacing: -0.04em; }
 .brand-word > span { color: var(--accent); }
+.brand-word > span[data-backend-status='connected'] { color: #1b5e46; }
+.brand-word > span[data-backend-status='disconnected'] { color: #8b2635; }
 .personal-label { min-width: 0; max-width: 420px; padding-left: 20px; border-left: 1px solid var(--border); color: var(--text-muted); font-size: 13px; }
 .personal-label:has(.el-input) { flex: 1; }
 .personal-label-button { display: block; max-width: 100%; padding: 5px 0; border: 0; background: transparent; color: inherit; font: inherit; text-align: left; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; cursor: text; }

@@ -20,7 +20,7 @@ function open() {
     stubs: {
       ElConfigProvider: slot, ElDialog: slot,
       ElDatePickerPanel: { props: ['modelValue'], template: '<div class="date-panel-stub" />' },
-      RiAddFill: true, RiFilterLine: true, RiFilterOffLine: true,
+      RiAddFill: true, RiFilterLine: true, RiFilterOffLine: true, RiDownload2Line: true, RiUpload2Line: true,
       ElButton: { props: ['disabled', 'nativeType'], template: '<button :type="nativeType || \'button\'" :disabled="disabled"><slot /></button>' },
       ElInput: { props: ['modelValue'], emits: ['update:modelValue'], template: '<input :value="modelValue" @input="$emit(\'update:modelValue\', $event.target.value)" />' },
       ElForm: { emits: ['submit'], template: '<form @submit.prevent="$emit(\'submit\', $event)"><slot /></form>' },
@@ -37,6 +37,26 @@ beforeEach(() => {
   saveDashboard.mockImplementation(async data => ({ ...data, revision: data.revision + 1 }))
 })
 afterEach(() => { wrapper?.unmount(); wrapper = null; vi.useRealTimers(); delete globalThis.WORKLOG_CONFIG })
+
+it('未配置后端时品牌圆点保留默认状态', async () => {
+  open(); await flushPromises()
+  const dot = wrapper.find('.brand-word > span')
+  expect(dot.text()).toBe('.')
+  expect(dot.attributes('data-backend-status')).toBe('unconfigured')
+  expect(dot.attributes('aria-label')).toContain('当前浏览器')
+})
+
+it.each([true, false])('品牌圆点显示后端健康检查结果：%s', async healthy => {
+  globalThis.WORKLOG_CONFIG.apiBaseUrl = '/api'
+  let finish
+  vi.spyOn(globalThis, 'fetch').mockImplementation(() => new Promise(resolve => { finish = resolve }))
+  open(); await wrapper.vm.$nextTick()
+  expect(wrapper.find('.brand-word > span').attributes('data-backend-status')).toBe('checking')
+  finish({ ok: true, json: async () => ({ ok: healthy }) })
+  await flushPromises()
+  expect(wrapper.find('.brand-word > span').attributes('data-backend-status')).toBe(healthy ? 'connected' : 'disconnected')
+  expect(wrapper.find('.brand-word').text()).toBe('worklog.')
+})
 
 it('项目管理默认未归档，可归档、查看归档、取消归档及删除，保存完整快照', async () => {
   const active = { id: 'p', name: '当前项目' }

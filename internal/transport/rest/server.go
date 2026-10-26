@@ -40,23 +40,9 @@ func New(svc *service.Service, c config.Config, logger *slog.Logger) http.Handle
 	r := chi.NewRouter()
 	r.Use(middleware.GetHead)
 	r.Use(s.middleware)
-	r.Get("/healthz", func(w http.ResponseWriter, r *http.Request) {
-		select {
-		case s.healthSlots <- struct{}{}:
-			defer func() { <-s.healthSlots }()
-		default:
-			s.fail(w, r, &domain.Error{Status: 503, Code: "UNAVAILABLE", Message: "健康检查繁忙"})
-			return
-		}
-		ctx, cancel := context.WithTimeout(r.Context(), 2*time.Second)
-		defer cancel()
-		if e := svc.Repo.Ping(ctx); e != nil {
-			s.fail(w, r, errors.Join(&domain.Error{Status: 503, Code: "UNAVAILABLE", Message: "数据库暂不可用"}, diagnostics.Wrap("health_ping", e)))
-			return
-		}
-		respond(w, map[string]bool{"ok": true})
-	})
+	r.Get("/healthz", s.health)
 	r.Route("/api", func(r chi.Router) {
+		r.Get("/healthz", s.health)
 		r.Get("/dashboard", s.dashboard)
 		r.Put("/dashboard", s.saveDashboard)
 		r.Get("/projects/export", s.exportProjects)
@@ -158,7 +144,7 @@ func (s *Server) middleware(next http.Handler) http.Handler {
 		}
 		// 仅已认证的业务请求消耗共用额度，避免静态资源和健康检查
 		// 挤占 API/MCP 的调用机会。
-		if strings.HasPrefix(r.URL.Path, "/api/") || r.URL.Path == "/mcp" {
+		if (strings.HasPrefix(r.URL.Path, "/api/") && r.URL.Path != "/api/healthz") || r.URL.Path == "/mcp" {
 			release, e := s.limiter.Acquire()
 			if e != nil {
 				s.fail(ww, r, e)
@@ -184,6 +170,25 @@ func (s *Server) middleware(next http.Handler) http.Handler {
 		next.ServeHTTP(ww, r)
 	})
 }
+
+// 两个入口共用数据库探测与独立并发限制；/api/healthz 仍要求业务认证。
+func (s *Server) health(w http.ResponseWriter, r *http.Request) {
+	select {
+	case s.healthSlots <- struct{}{}:
+		defer func() { <-s.healthSlots }()
+	default:
+		s.fail(w, r, &domain.Error{Status: 503, Code: "UNAVAILABLE", Message: "健康检查繁忙"})
+		return
+	}
+	ctx, cancel := context.WithTimeout(r.Context(), 2*time.Second)
+	defer cancel()
+	if e := s.Service.Repo.Ping(ctx); e != nil {
+		s.fail(w, r, errors.Join(&domain.Error{Status: 503, Code: "UNAVAILABLE", Message: "数据库暂不可用"}, diagnostics.Wrap("health_ping", e)))
+		return
+	}
+	respond(w, map[string]bool{"ok": true})
+}
+
 func respond(w http.ResponseWriter, out any) {
 	w.Header().Set("Content-Type", "application/json; charset=utf-8")
 	w.WriteHeader(http.StatusOK)

@@ -28,8 +28,10 @@ import {
 } from './dashboard'
 import { useTheme } from './composables/useTheme'
 import { useDraftSort } from './composables/useDraftSort'
+import { useBackendHealth } from './composables/useBackendHealth'
 
 const { isDark, toggleTheme } = useTheme()
+const { backendStatus, backendStatusLabel } = useBackendHealth()
 const data = ref(null)
 const error = ref('')
 const persisting = ref(false)
@@ -364,7 +366,7 @@ onMounted(load)
   <ElConfigProvider :locale="zhCn">
     <div class="app-shell" :inert="persisting" :aria-busy="persisting">
       <header class="topbar">
-        <a class="brand" href="./" aria-label="Worklog 首页"><span class="brand-mark"><img src="/logo.png" alt="" /></span><span class="brand-word">worklog<span>.</span></span></a>
+        <a class="brand" href="./" aria-label="Worklog 首页"><span class="brand-mark"><img src="/logo.png" alt="" /></span><span class="brand-word">worklog<span :data-backend-status="backendStatus" :title="backendStatusLabel" role="img" :aria-label="backendStatusLabel">.</span></span></a>
         <div class="personal-label">
           <ElInput v-if="editingPersonalLabel" ref="personalLabelInput" v-model="personalLabelDraft" maxlength="255" aria-label="工作台文字" placeholder="输入工作台文字" @blur="savePersonalLabel" @keydown.enter.prevent="savePersonalLabel" @keydown.esc.prevent="cancelPersonalLabel" />
           <button v-else type="button" class="personal-label-button" :disabled="!data" :title="personalLabel || '双击输入工作台文字'" aria-label="双击编辑工作台文字" @dblclick="editPersonalLabel">{{ personalLabel || '双击输入工作台文字' }}</button>
