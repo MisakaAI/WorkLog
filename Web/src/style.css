@@ -216,6 +216,15 @@ main { max-width: 1540px; padding: 32px 32px 48px; margin: 0 auto; }
 .project-edit-row > .el-input { min-width: 0; flex: 1; }
 .project-add, .project-edit-row { display: flex; align-items: center; gap: 8px; }
 .project-add { margin-bottom: 16px; }
+.project-status-tabs .el-tabs__header { margin-bottom: 10px; }
+.project-status-tabs.el-tabs--top > .el-tabs__header .el-tabs__item { margin: 0; padding: 0; height: auto; font-size: 13px; }
+/* 将内边距放在标签内容上，让 Element Tabs 的下划线覆盖整个页签，切换时首尾相接。 */
+.project-status-tabs .project-tab-label { display: inline-flex; align-items: center; justify-content: center; padding: 12px 24px; }
+.project-row-actions { display: flex; align-items: center; flex-shrink: 0; gap: 0; margin-left: 8px; }
+.project-row-actions .el-button { margin: 0; padding: 6px; }
+.project-dialog-actions { justify-content: flex-start; }
+.project-dialog-actions > .el-button:first-child { margin-right: auto; }
+.project-dialog-actions > .el-button + .el-button { margin-left: 0; }
 .project-drag-handle { display: inline-flex; align-items: center; justify-content: center; width: 28px; height: 32px; flex-shrink: 0; border: 0; border-radius: 4px; background: transparent; color: var(--text-secondary); cursor: grab; font-size: 22px; box-shadow: none; text-shadow: none; transition: color 150ms ease; }
 .project-drag-handle:hover { color: var(--accent); }
 .project-drag-handle:active { cursor: grabbing; }
@@ -388,6 +397,14 @@ main { max-width: 1540px; padding: 32px 32px 48px; margin: 0 auto; }
 .project-sort-row.drop-before::before { top: -6px; }
 .project-sort-row.drop-after::after { bottom: -6px; }
 .project-help { line-height: 1.8; }
+
+@media (max-width: 480px) {
+  .project-form .project-edit-row { flex-wrap: wrap; }
+  .project-form .project-edit-row > .el-input { flex-basis: calc(100% - 52px); }
+  .project-row-actions { margin-left: auto; }
+  .project-dialog-actions { gap: 8px; }
+  .project-dialog-actions > .el-button { padding-inline: 10px; }
+}
 
 @media (max-width: 1199px) {
   .dashboard-grid { grid-template-columns: minmax(0, 1fr); }

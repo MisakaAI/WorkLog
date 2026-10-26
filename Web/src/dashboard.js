@@ -5,7 +5,7 @@ export const columns = [
   { id: 'progress', title: '进行中' },
   { id: 'done', title: '已完成' },
 ]
-export const tags = ['开发', '临时', '个人', '产品', '设计', '调研']
+export const tags = ['开发', '产品', '设计', '调研', '临时', '个人']
 export const priorities = ['低', '中', '高', '极高']
 export const cardColors = [
   { id: 'white', label: '白' }, { id: 'red', label: '红' },

@@ -3,7 +3,7 @@ import { computed, nextTick, onBeforeUnmount, onMounted, reactive, ref, watch } 
 import {
   ElButton, ElCheckbox, ElConfigProvider, ElDatePickerPanel, ElDialog, ElEmpty,
   ElForm, ElFormItem, ElInput, ElSelect, ElOption, ElMessage, ElMessageBox,
-  ElRadioGroup, ElRadioButton,
+  ElRadioGroup, ElRadioButton, ElTabs, ElTabPane,
 } from 'element-plus'
 import { RiAddFill, RiFilterLine, RiFilterOffLine, RiInboxArchiveLine, RiInboxUnarchiveLine, RiUpload2Line, RiDownload2Line } from '@remixicon/vue'
 import zhCn from 'element-plus/es/locale/lang/zh-cn'
@@ -452,24 +452,35 @@ onMounted(load)
         </ElForm>
       </ElDialog>
 
-      <ElDialog v-model="projectDialog" title="项目管理" width="min(500px, 92vw)" @closed="resetProjectDrag">
+      <ElDialog v-model="projectDialog" title="项目管理" width="min(620px, 92vw)" @closed="resetProjectDrag">
         <p class="project-help">拖动排序手柄调整项目顺序。归档后项目及其任务不再展示，可在“已归档”中恢复。删除项目不会删除任务，任务会移至“未分配”。修改后点击保存生效。导出仅包含已保存的项目、关联任务和分类，不包含未分配任务、待办或工作日志。</p>
-        <div class="project-transfer-actions">
-          <ElButton :disabled="transferringProjects || persisting" @click="downloadProject()"><RiUpload2Line :size="17" aria-hidden="true" />全部导出</ElButton>
+        <div v-if="hasBackend" class="project-transfer-actions">
           <ElButton v-if="hasBackend" :disabled="transferringProjects || persisting" @click="projectImportInput?.click()"><RiDownload2Line :size="17" aria-hidden="true" />导入项目</ElButton>
           <input v-if="hasBackend" ref="projectImportInput" type="file" accept=".zip,application/zip" aria-label="选择项目 ZIP 文件" hidden @change="uploadProjects" />
         </div>
-        <ElButton :type="showArchivedProjects ? 'primary' : 'default'" :aria-pressed="showArchivedProjects" @click="showArchivedProjects = !showArchivedProjects; resetProjectDrag()">{{ showArchivedProjects ? '返回未归档' : '已归档' }}</ElButton>
         <ElForm class="project-form" @submit.prevent="saveProjects">
           <div class="project-add"><ElInput v-model="newProjectName" placeholder="新项目名称" aria-label="新项目名称" maxlength="40" @keydown.enter.prevent="addDraftProject" /><ElButton @click="addDraftProject"><Icon name="Add" :size="16" />添加</ElButton></div>
+          <ElTabs class="project-status-tabs" :model-value="showArchivedProjects ? 'archived' : 'active'" @tab-change="showArchivedProjects = $event === 'archived'; resetProjectDrag()">
+            <ElTabPane label="进行中" name="active"><template #label><span class="project-tab-label">进行中</span></template></ElTabPane>
+            <ElTabPane label="已归档" name="archived"><template #label><span class="project-tab-label">已归档</span></template></ElTabPane>
+          </ElTabs>
           <div class="project-edit-list project-sort-list" @dragover="previewProjectDrop" @dragleave="leaveProjectList" @drop.prevent.stop="dropProject">
             <div v-for="(project, index) in visibleDraftProjects" :key="project.id" class="project-edit-row project-sort-row" :class="{ 'is-dragging': draggedProject === project.id, 'drop-before': projectDropIndex === index, 'drop-after': projectDropIndex === visibleDraftProjects.length && index === visibleDraftProjects.length - 1 }">
               <button type="button" class="project-drag-handle" draggable="true" :aria-label="`拖动排序：${project.name}；方向键上下移动`" title="拖动排序，也可使用上下方向键" @dragstart="startProjectDrag($event, project.id)" @dragend="resetProjectDrag" @keydown.up.prevent="moveProject(project.id, -1)" @keydown.down.prevent="moveProject(project.id, 1)">⠿</button>
-              <ElInput v-model="project.name" :aria-label="`项目名称：${project.name}`" maxlength="40" /><ElButton text :disabled="transferringProjects || persisting || !projectSnapshot.projects.some(item => item.id === project.id)" :aria-label="`导出项目：${project.name}`" title="导出已保存的项目" @click="downloadProject(project.id)"><RiUpload2Line :size="17" aria-hidden="true" /></ElButton><ElButton text :aria-label="`${project.archived ? '取消归档' : '归档'}项目：${project.name}`" :title="project.archived ? '取消归档' : '归档'" @click="toggleProjectArchive(project)"><RiInboxUnarchiveLine v-if="project.archived" :size="17" aria-hidden="true" /><RiInboxArchiveLine v-else :size="17" aria-hidden="true" /></ElButton><ElButton text type="danger" :aria-label="`删除项目：${project.name}`" @click="draftProjects = draftProjects.filter(item => item.id !== project.id)"><Icon name="Delete" :size="17" /></ElButton>
+              <ElInput v-model="project.name" :aria-label="`项目名称：${project.name}`" maxlength="40" />
+              <div class="project-row-actions">
+                <ElButton text :aria-label="`${project.archived ? '取消归档' : '归档'}项目：${project.name}`" :title="project.archived ? '取消归档' : '归档'" @click="toggleProjectArchive(project)"><RiInboxUnarchiveLine v-if="project.archived" size="17" aria-hidden="true" /><RiInboxArchiveLine v-else size="17" aria-hidden="true" /></ElButton>
+                <ElButton text :disabled="transferringProjects || persisting || !projectSnapshot.projects.some(item => item.id === project.id)" :aria-label="`导出项目：${project.name}`" title="导出项目" @click="downloadProject(project.id)"><RiUpload2Line size="17" aria-hidden="true" /></ElButton>
+                <ElButton text type="danger" :aria-label="`删除项目：${project.name}`" title="删除项目" @click="draftProjects = draftProjects.filter(item => item.id !== project.id)"><Icon name="Delete" :size="17" /></ElButton>
+              </div>
             </div>
-            <ElEmpty v-if="!visibleDraftProjects.length" :image-size="48" :description="showArchivedProjects ? '暂无已归档项目。' : '暂无未归档项目。'" />
+            <ElEmpty v-if="!visibleDraftProjects.length" :image-size="48" :description="showArchivedProjects ? '暂无已归档项目。' : '暂无进行中的项目。'" />
           </div>
-          <div class="dialog-actions"><ElButton class="cancel-button" @click="projectDialog = false">取消</ElButton><ElButton type="primary" native-type="submit">保存项目</ElButton></div>
+          <div class="dialog-actions project-dialog-actions">
+            <ElButton :disabled="transferringProjects || persisting" @click="downloadProject()"><RiUpload2Line :size="17" aria-hidden="true" />全部导出</ElButton>
+            <ElButton class="cancel-button" @click="projectDialog = false">取消</ElButton>
+            <ElButton type="primary" native-type="submit">保存</ElButton>
+          </div>
         </ElForm>
       </ElDialog>
       <ElDialog v-model="categoryDialog" title="分类管理" width="min(500px, 92vw)" @closed="resetCategoryDrag">
