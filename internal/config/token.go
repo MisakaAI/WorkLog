@@ -3,6 +3,7 @@ package config
 import (
 	"crypto/rand"
 	"encoding/hex"
+	"io"
 	"os"
 	"path/filepath"
 	"strings"
@@ -15,14 +16,16 @@ func loadOrCreateToken(path string) (string, error) {
 	// 其他进程可能刚创建文件、尚未完成写入。短暂等待其发布，
 	// 绝不替换已有 Token，以免正在运行的客户端凭证失效。
 	for attempt := 0; attempt < 100; attempt++ {
-		b, err := os.ReadFile(path)
+		file, err := os.Open(path)
 		if err == nil {
-			info, e := os.Stat(path)
+			// Check the same open file that we read, before reading credentials.
+			b, e := readTokenFile(file)
+			closeErr := file.Close()
 			if e != nil {
 				return "", e
 			}
-			if !info.Mode().IsRegular() || info.Mode().Perm()&0077 != 0 {
-				return "", diagnostics.Safe("token file must be regular and private (chmod 600)")
+			if closeErr != nil {
+				return "", closeErr
 			}
 			token := strings.TrimSpace(string(b))
 			if len(token) >= 32 {
@@ -34,8 +37,8 @@ func loadOrCreateToken(path string) (string, error) {
 				return "", err
 			}
 			token := hex.EncodeToString(random)
-			// 以 0600 权限原子发布完整文件，不覆盖其他进程先发布的 Token。
-			// Unix 上普通 rename 会覆盖目标，因此改用硬链接发布。
+			// Atomically publish a complete, private file without replacing a
+			// competing token. Rename can overwrite; hard-link publication cannot.
 			e := publishToken(path, token)
 			if e == nil {
 				return token, nil
@@ -51,8 +54,22 @@ func loadOrCreateToken(path string) (string, error) {
 	return "", diagnostics.Safe("token file is incomplete or invalid; check token generation and retry")
 }
 
+func readTokenFile(file *os.File) ([]byte, error) {
+	info, err := file.Stat()
+	if err != nil {
+		return nil, err
+	}
+	if !info.Mode().IsRegular() {
+		return nil, diagnostics.Safe("token file must be regular and private")
+	}
+	if err := checkTokenPermissions(file, info); err != nil {
+		return nil, err
+	}
+	return io.ReadAll(file)
+}
+
 func publishToken(path, token string) error {
-	file, err := os.CreateTemp(filepath.Dir(path), ".mcp-token-*")
+	file, err := createPrivateTokenTemp(filepath.Dir(path))
 	if err != nil {
 		return err
 	}
@@ -68,5 +85,7 @@ func publishToken(path, token string) error {
 	if closeErr != nil {
 		return closeErr
 	}
+	// Do not fall back to rename or copying on filesystems (including some
+	// remote shares) without hard links: that would weaken no-replace publication.
 	return os.Link(file.Name(), path)
 }

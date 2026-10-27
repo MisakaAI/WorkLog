@@ -6,7 +6,6 @@ import (
 	"flag"
 	"io"
 	"log/slog"
-	"net/http"
 	"os"
 	"os/signal"
 	"path/filepath"
@@ -15,6 +14,7 @@ import (
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 	_ "time/tzdata"
+	"worklog/internal/app"
 	"worklog/internal/config"
 	"worklog/internal/diagnostics"
 	"worklog/internal/domain"
@@ -94,22 +94,20 @@ func run(logger *slog.Logger) error {
 		server := mcptransport.New(svc, id, logger, security.NewLimiter())
 		return server.Run(ctx, &mcp.StdioTransport{})
 	}
-	srv := rest.HTTPServer(c.Addr, rest.New(svc, c, logger))
-	done := make(chan error, 1)
-	go func() { done <- srv.ListenAndServe() }()
-	logger.Info("server_started", "address", c.Addr, "database", c.Driver, "business_timezone", c.Timezone, "local_mode", c.Local, "mcp_destructive_enabled", c.MCPDestructive)
-	select {
-	case err = <-done:
-		if errors.Is(err, http.ErrServerClosed) {
-			return nil
-		}
-		return err
-	case <-ctx.Done():
-		// 收到退出信号后使用独立上下文，给正在处理的请求留出完成时间。
-		shutdown, cancel := context.WithTimeout(context.Background(), 15*time.Second)
-		defer cancel()
-		return srv.Shutdown(shutdown)
+	srv := app.NewHTTP(c.Addr, rest.New(svc, c, logger), logger)
+	if err = srv.Start(); err != nil {
+		return diagnostics.Wrap("start_http", err)
 	}
+	logger.Info("server_started", "url", srv.URL(), "database", c.Driver, "business_timezone", c.Timezone, "local_mode", c.Local, "mcp_destructive_enabled", c.MCPDestructive)
+	select {
+	case err = <-srv.Done():
+	case <-ctx.Done():
+	}
+	// Stop and drain every request before the deferred database Close, including
+	// when Serve failed unexpectedly. The shutdown context is independent of ctx.
+	shutdown, cancel := context.WithTimeout(context.Background(), 15*time.Second)
+	defer cancel()
+	return errors.Join(err, srv.Shutdown(shutdown))
 }
 
 // parseArgs 要求全局选项位于子命令之前，例如 worklog --conf=/etc/worklog backup out.db。

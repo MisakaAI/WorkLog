@@ -1,0 +1,98 @@
+# Windows 托盘桌面端（Go 单进程）
+
+Worklog 桌面版以一个 `worklog-v<版本号>-windows-x86_64.exe` 运行原生 Win32 托盘、现有 Go API、数据库连接和嵌入的 Vue 界面；不使用 Electron、WebView，也不启动独立业务后端进程。界面在系统默认浏览器中打开，关闭浏览器不会退出服务。
+
+## 从 Linux 构建 Windows x64
+
+需要仓库 `go.mod` 指定的 Go 版本、Node.js 24.15+、npm 和下载依赖的网络连接。无需 Windows SDK、MinGW、CGO、Wine 或 Windows 环境：
+
+```sh
+# 若 Go 不在 PATH，请先添加相应目录，例如：
+export PATH=/opt/go/bin:$PATH
+bash scripts/build-windows.sh
+```
+
+产物命名为 **`bin/worklog-v<版本号>-windows-x86_64.exe`**，默认读取仓库根目录的 `VERSION`（当前为 `0.1.0`），因此默认产物为 `bin/worklog-v0.1.0-windows-x86_64.exe`。可用环境变量覆盖（允许带 `v` 前缀，文件名只保留一个 `v`）：
+
+```sh
+VERSION=0.2.0 bash scripts/build-windows.sh
+# bin/worklog-v0.2.0-windows-x86_64.exe
+VERSION=v0.2.0-rc.1 bash scripts/build-windows.sh
+# bin/worklog-v0.2.0-rc.1-windows-x86_64.exe
+```
+
+版本号使用 `X.Y.Z` 格式，可带预发行／构建后缀；不允许路径分隔符。`VERSION` 表示整体桌面发行版本，与前端 npm 包的内部版本独立。不同版本产物可并存，脚本不生成旧的 `Worklog.exe` 别名，也不删除已有构建文件。
+
+脚本会执行 `npm ci`、Vite 生产构建、固定版本的纯 Go Windows 资源编译器，以及 `GOOS=windows GOARCH=amd64 CGO_ENABLED=0` 构建。`-H=windowsgui` 隐藏 Release 控制台。图标复用 `Web/public/favicon.ico`，资源和 manifest 编入 PE；前端、Monaco workers、时区和数据库迁移都在 exe 内。目标机器无需安装 Go、Node.js 或额外 GUI 运行时。构建时生成的 `.syso` 不是发行文件。
+
+普通命令行服务仍按根 README 构建，不依赖桌面资源；桌面入口需要 `desktop` build tag 和预先生成的 `Web/dist`，推荐始终使用脚本。
+
+## 交互与生命周期
+
+托盘菜单：
+
+```text
+Worklog                  （不可点击标题）
+────────────────
+● 服务运行中             （不可点击状态）
+────────────────
+打开 Worklog
+重启服务
+────────────────
+开机启动                 （默认不勾选）
+────────────────
+退出 Worklog
+```
+
+- 启动时显示启动中；完成数据库初始化、迁移和监听绑定后，显示运行中并自动打开默认浏览器。URL 使用**实际绑定地址**，不猜测端口。
+- 默认监听 `127.0.0.1:0`，由 Windows 分配空闲端口。进程内重启保留该端口，已有浏览器页面可继续刷新；完全退出再启动时端口可能改变。
+- “打开 Worklog”只启动浏览器导航，不创建服务。Windows 每用户会话命名互斥量保证单实例（由专用 OS 线程持有，支持主实例死亡后的 abandoned-mutex 回收）；重复运行 exe 通过命名事件通知已有实例打开页面，不开放额外 IPC 网络端口。初始化期间的打开通知会合并处理。
+- “重启服务”在当前进程内优雅关闭 HTTP、等待请求退出，再重新绑定；不重建数据库连接、业务服务或进程级后台资源，不自动打开浏览器。并发点击会合并，退出优先取消启动。失败显示异常，可再次重启。若端口被其他程序抢占，不会误打开该程序的页面。
+- “开机启动”是可勾选项，首次使用默认关闭；只在用户主动勾选时写入 `HKCU\Software\Microsoft\Windows\CurrentVersion\Run` 的 `WorklogDesktop` 值，不需要管理员权限。取消勾选只删除此值，不影响其他程序。每次打开菜单都会读取注册表状态，设置失败会提示并写入日志，不会假装已成功。
+- 开机启动实际在当前用户登录后执行，以 `--autostart` 静默常驻托盘，不自动打开浏览器；仍可用“打开 Worklog”访问。登记绝对 exe 路径和当前配置文件路径（若有），支持空格和中文。设置会跨退出／重启保留；移动 exe 或更换配置后需重新勾选以更新登记路径。Windows 启动应用设置／策略也可能另外禁用该项。
+- “退出 Worklog”先停止 HTTP（15 秒优雅超时后强制断开连接并等待请求清理），再关闭数据库及连接池后台资源，移除托盘，释放单实例句柄，最后退出。若某个请求处理器不响应取消，等待清理可能超过 15 秒，以免提前关闭仍在使用的数据库。
+- HTTP 异常不会让托盘退出；预托盘的致命错误用 Windows 消息框提示。浏览器启动失败记录日志，可再次使用“打开 Worklog”。浏览器调用使用独立、合并请求的队列，即使系统 Shell 卡住也不会阻塞 HTTP 重启和退出。
+
+重启或退出前请先等待页面保存完成。退出后浏览器标签页不会被强制关闭，未发送到服务的编辑内容无法由托盘代为保存。注销／关机的 `WM_ENDSESSION` 路径会等待最多 4 秒的清理完成通知，但 Windows 可强制终止程序，不保证能等待完整的优雅关闭时间。
+
+## 数据、配置与日志
+
+桌面版把工作目录固定为 `%APPDATA%\WorklogDesktop`，默认生成：
+
+```text
+%APPDATA%\WorklogDesktop\
+  data\worklog.db         # 原有 SQLite 模型、WAL 和迁移
+  data\mcp-token          # 原有 MCP Bearer 令牌
+  worklog.log             # JSON 日志
+  worklog.log.1           # 下次启动时轮转的旧日志（达到 5 MiB）
+  config.json             # 可选，用户自行创建
+```
+
+目录使用当前用户与 SYSTEM 的受保护、可继承 Windows DACL；已有应用目录中的子文件和子目录也会校验 owner／DACL，不接受 reparse point 或对其他用户开放的权限，发现问题会拒绝启动，而不擅自改写已有文件权限。令牌校验 Windows ACL，不使用无效的 Unix chmod 权限作为 Windows 安全保障。SQLite 应保存在本机磁盘，默认令牌的原子发布要求支持硬链接的文件系统（推荐 NTFS）。日志在启动时轮转，不在运行中持续截断；长时间运行可积累较大日志。
+
+配置使用现有 JSON 字段、业务身份、时区、Basic 密码、MCP 令牌与数据格式，**不会迁移、覆盖或清空旧数据库**：
+
+1. `worklog-v0.1.0-windows-x86_64.exe --conf C:\path\config.json`（也支持目录）优先。
+2. 无 `--conf` 时，若存在 `%APPDATA%\WorklogDesktop\config.json`，使用该文件。
+3. 否则沿用 `WORKLOG_*` 环境变量（桌面默认值替代服务器默认值）。
+
+与原服务相同，指定配置文件后忽略 `WORKLOG_*`。显式 `--conf` 相对路径在切换目录前解析；配置内部相对数据／令牌路径以桌面数据目录为准。要使用已有数据，可配置其**绝对路径**（先关闭其他 Worklog 写入实例，并做好备份），不需要复制或转换。普通 CLI 的默认路径与行为不变。显式指定在应用数据目录之外的数据库或配置文件时，其目录与文件 ACL 由用户负责；桌面版不递归修改外部目录。
+
+桌面版只允许 `addr` 主机为 `127.0.0.1`；端口可指定，推荐默认 `127.0.0.1:0`。`static_dir` 在桌面版不生效，始终使用嵌入的前端，避免意外提供数据目录文件。更新前端需重新构建 exe。自定义工作日历也应在构建前修改 `Web/public/work-calendar.json`，桌面版不提供磁盘静态资源覆盖。
+
+日志保留现有结构化业务请求及错误审计，新增启动、状态、重启、关闭、数据库释放和浏览器启动失败事件。启动异常时查看 `worklog.log`；修复配置／端口问题后可从托盘重试。
+
+## 安全边界
+
+- 浏览器访问同源 HTTP 页面和 `/api`；动态 `/config.js` 指向 `/api`，不会误用前端 localStorage 模式。
+- 继续使用原有 Basic、Bearer、Host／Origin／Fetch Metadata 检查、静态路径白名单、请求限制，不向浏览器注入 MCP 令牌，不绕过认证。
+- 本机免密条件与原项目一致：仅可信回环请求且未设置 Basic 密码时允许。本机 HTTP **不是与本地其他程序隔离的安全边界**。共享电脑建议设置 `basic_password`（至少 8 字节）。
+- 默认桌面配置不信任 Vite 开发 Origin；已有显式可信名单和密码保留，不自动扩展名单。若自定义 `allowed_hosts`，需保留 `127.0.0.1`。
+- 动态端口跨完整启动可能变化，MCP 客户端应更新 URL；需要固定 MCP 地址时可显式配置回环固定端口。
+- 每个 Windows 用户会话各有单实例锁；同一用户多个登录会话仍可能访问同一数据目录。不要跨会话对同一数据库同时执行恢复或维护。
+
+## 验证范围与限制
+
+实现时已在 Linux 通过 `go test -race ./...`、`go vet ./...`、Windows 目标静态检查与构建脚本，并交叉编译 Windows 专属测试二进制（没有运行这些 Windows 测试）。测试覆盖 HTTP 关闭／并发／失败重试、重启后业务数据和认证保留、嵌入式资源认证与白名单。交叉编译不能代替 Windows 运行测试。
+
+尚需 Windows 实机确认：托盘显示／中文菜单／DPI、Explorer 重启后的图标恢复、默认浏览器和 Basic 认证提示、重复启动与 Windows 会话隔离、ACL 与非 ASCII 路径、系统注销／关机时的退出行为，以及开机启动勾选状态、注册表写入和登录后静默启动。未引入安装器、自动更新或数字签名；未签名 exe 可能触发 SmartScreen／杀毒软件提示。

@@ -39,6 +39,20 @@ go build -o bin/worklog ./cmd/worklog
 
 自定义配置、Nginx 反向代理及 Docker / PostgreSQL 部署见[部署与配置](docs/DEPLOYMENT.md)。
 
+## Windows 托盘桌面版
+
+桌面版为单文件 `worklog-v<版本号>-windows-x86_64.exe`：Go 单进程原生系统托盘 + 本机 HTTP 服务 + 嵌入式 Vue，界面使用默认浏览器，无需 Electron 或 WebView。支持单实例、打开页面、进程内重启、可选开机启动（默认关闭）和有序退出；数据默认保存在 `%APPDATA%\WorklogDesktop`。
+
+Linux 下构建 Windows x64：
+
+```sh
+bash scripts/build-windows.sh
+# 默认读取 VERSION，当前产物：bin/worklog-v0.1.0-windows-x86_64.exe
+# 可覆盖版本号：VERSION=0.2.0 bash scripts/build-windows.sh
+```
+
+构建依赖和配置兼容说明见 [Windows 桌面版](docs/WINDOWS_DESKTOP.md)。Windows GUI 行为尚需实机验证。
+
 ## 简单使用
 
 - 在工作台创建项目、添加任务，在列表／看板／甘特图中管理进度与排期。

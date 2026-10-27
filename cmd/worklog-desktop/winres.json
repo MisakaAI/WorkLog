@@ -1,0 +1,18 @@
+{
+  "RT_GROUP_ICON": {
+    "#1": {
+      "0000": "../../Web/public/favicon.ico"
+    }
+  },
+  "RT_MANIFEST": {
+    "#1": {
+      "0409": {
+        "description": "Worklog",
+        "minimum-os": "win10",
+        "execution-level": "as invoker",
+        "ui-access": false,
+        "dpi-awareness": "per monitor v2"
+      }
+    }
+  }
+}

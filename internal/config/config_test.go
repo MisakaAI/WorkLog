@@ -1,7 +1,6 @@
 package config
 
 import (
-	"os"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -24,7 +23,7 @@ func TestDefaultsAndTokenPermissions(t *testing.T) {
 	if e != nil || second.WriteToken != c.WriteToken {
 		t.Fatal("token not persistent", e)
 	}
-	if e = os.Chmod(filepath.Join(dir, "private", "token"), 0644); e != nil {
+	if e = makeTokenInsecure(filepath.Join(dir, "private", "token")); e != nil {
 		t.Fatal(e)
 	}
 	if _, e = Load(); e == nil {

@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"io/fs"
 	"log/slog"
 	"mime"
 	"net/http"
@@ -32,11 +33,18 @@ type Server struct {
 	Logger      *slog.Logger
 	limiter     *security.Limiter
 	healthSlots chan struct{}
+	staticFS    fs.FS
 }
 type requestKey struct{}
 
 func New(svc *service.Service, c config.Config, logger *slog.Logger) http.Handler {
-	s := &Server{Service: svc, Config: c, Logger: logger, limiter: security.NewLimiter(), healthSlots: make(chan struct{}, 4)}
+	return NewWithStaticFS(svc, c, logger, nil)
+}
+
+// NewWithStaticFS keeps embedded assets behind the same authentication and path
+// allowlist as disk assets. A nil filesystem retains the server's disk mode.
+func NewWithStaticFS(svc *service.Service, c config.Config, logger *slog.Logger, assets fs.FS) http.Handler {
+	s := &Server{Service: svc, Config: c, Logger: logger, limiter: security.NewLimiter(), healthSlots: make(chan struct{}, 4), staticFS: assets}
 	r := chi.NewRouter()
 	r.Use(middleware.GetHead)
 	r.Use(s.middleware)
@@ -73,7 +81,7 @@ func New(svc *service.Service, c config.Config, logger *slog.Logger) http.Handle
 		// 转发、且已在白名单中的公网域名。
 		DisableLocalhostProtection: true})
 	r.Handle("/mcp", mh)
-	if c.StaticDir != "" {
+	if assets != nil || c.StaticDir != "" {
 		r.Get("/config.js", func(w http.ResponseWriter, r *http.Request) {
 			w.Header().Set("Content-Type", "text/javascript; charset=utf-8")
 			_, _ = fmt.Fprintf(w, "window.WORKLOG_CONFIG = { apiBaseUrl: '/api', businessTimezone: %q };", c.Timezone)

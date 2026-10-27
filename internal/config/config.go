@@ -58,12 +58,27 @@ func LoadFile(path string) (Config, error) {
 	return load(path)
 }
 
+// LoadDesktop uses per-user desktop defaults while preserving the existing JSON
+// schema and authentication settings. The caller sets its working directory to
+// the data directory so explicitly configured relative paths remain predictable.
+func LoadDesktop(path string) (Config, error) {
+	return loadConfig(path, true)
+}
+
 func load(path string) (Config, error) {
+	return loadConfig(path, false)
+}
+
+func loadConfig(path string, desktop bool) (Config, error) {
 	get := env
 	if path != "" {
 		get = func(_ string, def string) string { return def }
 	}
-	c := Config{Addr: get("ADDR", "127.0.0.1:12450"), Driver: get("DB_DRIVER", "sqlite"), DSN: get("DB_DSN", "./data/worklog.db"), User: get("USER_ID", "owner"), Timezone: get("TIMEZONE", "Asia/Shanghai"), StaticDir: get("STATIC_DIR", "Web/dist"), WriteToken: get("WRITE_TOKEN", ""), ReadToken: get("READ_TOKEN", ""), BasicUser: get("BASIC_USER", "worklog"), BasicPassword: get("BASIC_PASSWORD", ""), AllowedHosts: split(get("ALLOWED_HOSTS", "localhost,127.0.0.1,::1")), AllowedOrigins: split(get("ALLOWED_ORIGINS", "http://localhost:5173,http://127.0.0.1:5173")), MCPDestructive: get("MCP_ALLOW_DESTRUCTIVE", "false") == "true", TokenFile: get("TOKEN_FILE", "./data/mcp-token"), StdioReadOnly: get("STDIO_READ_ONLY", "false") == "true"}
+	addr, staticDir, origins := "127.0.0.1:12450", "Web/dist", "http://localhost:5173,http://127.0.0.1:5173"
+	if desktop {
+		addr, staticDir, origins = "127.0.0.1:0", "", ""
+	}
+	c := Config{Addr: get("ADDR", addr), Driver: get("DB_DRIVER", "sqlite"), DSN: get("DB_DSN", "./data/worklog.db"), User: get("USER_ID", "owner"), Timezone: get("TIMEZONE", "Asia/Shanghai"), StaticDir: get("STATIC_DIR", staticDir), WriteToken: get("WRITE_TOKEN", ""), ReadToken: get("READ_TOKEN", ""), BasicUser: get("BASIC_USER", "worklog"), BasicPassword: get("BASIC_PASSWORD", ""), AllowedHosts: split(get("ALLOWED_HOSTS", "localhost,127.0.0.1,::1")), AllowedOrigins: split(get("ALLOWED_ORIGINS", origins)), MCPDestructive: get("MCP_ALLOW_DESTRUCTIVE", "false") == "true", TokenFile: get("TOKEN_FILE", "./data/mcp-token"), StdioReadOnly: get("STDIO_READ_ONLY", "false") == "true"}
 	if path != "" {
 		if err := readFile(path, &c); err != nil {
 			return c, err
@@ -72,6 +87,13 @@ func load(path string) (Config, error) {
 	host, _, e := net.SplitHostPort(c.Addr)
 	if e != nil {
 		return c, diagnostics.Safe("WORKLOG_ADDR must be host:port")
+	}
+	if desktop {
+		if host != "127.0.0.1" {
+			return c, diagnostics.Safe("desktop addr must bind to 127.0.0.1")
+		}
+		// Desktop always serves embedded resources, never user data or disk files.
+		c.StaticDir = ""
 	}
 	ip := net.ParseIP(host)
 	c.Local = host == "localhost" || ip != nil && ip.IsLoopback()
