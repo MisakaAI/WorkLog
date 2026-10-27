@@ -188,7 +188,7 @@ function openTask(task = null, status = 'planned', projectId = selectedProject.v
   Object.assign(taskForm, {
     title: task?.title || '', description: task?.description || '', status: task?.status || status,
     projectId: task ? task.projectId : projectId, tag: task?.tag || (categories.value.includes('开发') ? '开发' : categories.value[0]), priority: task?.priority || '中',
-    startDate: task ? task.startDate : todayISO(), date: task?.date || '', color: task?.color || 'white',
+    startDate: task?.startDate || '', date: task?.date || '', color: task?.color || 'white',
   })
   dialog.value = true
 }
