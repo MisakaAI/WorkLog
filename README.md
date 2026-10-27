@@ -50,6 +50,7 @@ go build -o bin/worklog ./cmd/worklog
 
 ## 文档
 
+- [Windows 桌面打包](desktop/README.md)：在 Linux 构建独立的 Windows x86-64 Electron + Go 解压包／可选安装包，以及数据目录与验收步骤。
 - [部署与配置](docs/DEPLOYMENT.md)：配置文件、环境变量、Nginx 反向代理、Docker 与 PostgreSQL。
 - [systemd 持久运行](docs/SYSTEMD.md)：专用用户、配置文件、开机自启、日志与服务维护，附 [worklog.service 示例](docs/worklog.service)。
 - [身份认证与安全](docs/AUTHENTICATION.md)：本地／Basic／Bearer／stdio、权限矩阵与安全边界。

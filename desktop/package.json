@@ -1,0 +1,50 @@
+{
+  "name": "worklog-desktop",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Standalone Windows desktop packaging for Worklog",
+  "author": "Worklog contributors",
+  "main": "main.cjs",
+  "engines": { "node": "24.x", "npm": "11.x" },
+  "scripts": {
+    "test": "node --test tests/*.test.cjs",
+    "pack:win": "electron-builder --win zip --x64",
+    "pack:installer": "electron-builder --win nsis --x64"
+  },
+  "devDependencies": {
+    "@electron/get": "3.1.0",
+    "7zip-bin": "5.2.0",
+    "electron": "45.0.0",
+    "electron-builder": "26.18.0"
+  },
+  "build": {
+    "appId": "org.worklog.desktop",
+    "productName": "Worklog",
+    "asar": true,
+    "electronDownload": {
+      "checksums": {
+        "electron-v45.0.0-win32-x64.zip": "ae53887a23bb640369c93dbd38c408a2af5c0deb86f2fa76c6c244cb444b7f47"
+      }
+    },
+    "npmRebuild": false,
+    "directories": { "output": "dist" },
+    "files": ["main.cjs", "runtime.cjs", "window-behavior.cjs", "package.json"],
+    "extraResources": [
+      { "from": "build/backend", "to": "backend", "filter": ["*.exe"] },
+      { "from": "build/web", "to": "web" },
+      { "from": "build/BUILD-INFO.json", "to": "BUILD-INFO.json" }
+    ],
+    "win": {
+      "target": [{ "target": "zip", "arch": ["x64"] }],
+      "signAndEditExecutable": false,
+      "artifactName": "Worklog-${version}-win-x64.${ext}"
+    },
+    "nsis": {
+      "oneClick": false,
+      "perMachine": false,
+      "allowToChangeInstallationDirectory": true,
+      "deleteAppDataOnUninstall": false,
+      "artifactName": "Worklog-${version}-win-x64-setup.${ext}"
+    }
+  }
+}
