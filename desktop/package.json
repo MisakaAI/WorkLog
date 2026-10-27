@@ -30,6 +30,7 @@
     "directories": { "output": "dist" },
     "files": ["main.cjs", "runtime.cjs", "window-behavior.cjs", "package.json"],
     "extraResources": [
+      { "from": "../Web/public/favicon.ico", "to": "tray.ico" },
       { "from": "build/backend", "to": "backend", "filter": ["*.exe"] },
       { "from": "build/web", "to": "web" },
       { "from": "build/BUILD-INFO.json", "to": "BUILD-INFO.json" }

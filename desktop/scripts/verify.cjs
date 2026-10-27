@@ -21,12 +21,14 @@ function assertPE64(file) {
 for (const name of ['Worklog.exe', 'resources/backend/worklog.exe', 'resources/backend/worklog-supervisor.exe']) {
   assertPE64(path.join(unpacked, name))
 }
-for (const name of ['resources/app.asar', 'resources/web/index.html', 'resources/web/config.js',
+for (const name of ['resources/app.asar', 'resources/tray.ico', 'resources/web/index.html', 'resources/web/config.js',
   'resources/BUILD-INFO.json', 'locales/en-US.pak', 'locales/zh-CN.pak', 'icudtl.dat', 'resources.pak',
   'electron_wer.dll', 'ffmpeg.dll', 'chrome_100_percent.pak', 'chrome_200_percent.pak',
   'v8_context_snapshot.bin', 'LICENSE.electron.txt', 'LICENSES.chromium.html']) {
   assert.ok(fs.statSync(path.join(unpacked, name)).size > 0, `missing resource: ${name}`)
 }
+assert.ok(fs.readFileSync(path.join(unpacked, 'resources/tray.ico')).equals(
+  fs.readFileSync(path.resolve(root, '../Web/public/favicon.ico'))), 'packaged tray icon differs from source')
 assert.ok(fs.readdirSync(path.join(unpacked, 'resources/web/assets')).some((f) => f.endsWith('.js')))
 const info = JSON.parse(fs.readFileSync(path.join(unpacked, 'resources/BUILD-INFO.json')))
 assert.equal(info.target, 'win-x64')
@@ -41,7 +43,7 @@ else {
   verifyZipArchive(artifact, archive)
   const list = execFileSync(path7za, ['l', artifact], { encoding: 'utf8' })
   for (const name of ['Worklog.exe', 'resources/backend/worklog.exe', 'resources/backend/worklog-supervisor.exe',
-    'resources/web/index.html', 'resources/app.asar', 'icudtl.dat']) assert.ok(list.includes(name), `archive missing ${name}`)
+    'resources/web/index.html', 'resources/app.asar', 'resources/tray.ico', 'icudtl.dat']) assert.ok(list.includes(name), `archive missing ${name}`)
 }
 console.log(`已验证 AMD64 Go 后端、监管进程、Electron 和 Vue 资源：${artifact}`)
 

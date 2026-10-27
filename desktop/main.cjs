@@ -1,10 +1,10 @@
 'use strict'
 
-const { app, BrowserWindow, dialog, session } = require('electron')
+const { app, BrowserWindow, dialog, session, Tray, Menu, nativeImage } = require('electron')
 const fs = require('node:fs')
 const path = require('node:path')
 const { Backend, prepareConfig, isAppPage, isAppRequest } = require('./runtime.cjs')
-const { launchAction, registerTaskbarExit, minimizeOnClose, handleSecondInstance } = require('./window-behavior.cjs')
+const { launchAction, createTray, hideOnClose, handleSecondInstance } = require('./window-behavior.cjs')
 
 // electron-builder strips package.json's build metadata from app.asar.
 // Keep this runtime ID aligned with build.appId in the source package.json.
@@ -15,6 +15,7 @@ const action = launchAction(process.argv)
 app.setPath('userData', path.join(app.getPath('appData'), 'WorklogDesktop'))
 let backend
 let window
+let tray
 let quitting = false
 let reporting = false
 let log = () => {}
@@ -36,6 +37,8 @@ app.on('before-quit', (event) => {
   if (quitting) return
   event.preventDefault()
   quitting = true
+  tray?.destroy()
+  tray = undefined
   // Do not let renderer beforeunload dialogs obstruct service cleanup.
   if (window && !window.isDestroyed()) window.destroy()
   void (async () => {
@@ -75,9 +78,17 @@ if (!app.requestSingleInstanceLock({ action })) {
       written += entry.length
       try { fs.appendFileSync(logFile, entry, { mode: 0o600 }) } catch { /* Disk errors must not prevent cleanup. */ }
     }
-    // Install the real exit command before starting Go. Fail visibly rather
-    // than leave a minimize-on-close app without its promised exit route.
-    registerTaskbarExit(app, process.execPath)
+    // Create the exit route before starting Go or allowing close-to-tray.
+    tray = createTray({
+      app, Tray, Menu, nativeImage,
+      iconPath: path.join(process.resourcesPath, 'tray.ico'),
+      getWindow: () => window, isQuitting: () => quitting,
+    })
+    // Remove the previous version's Jump List task. System policy must not
+    // prevent startup now that exiting no longer depends on taskbar tasks.
+    try {
+      if (!app.setUserTasks([])) log('无法清除旧版任务栏任务；请使用托盘菜单退出。\n')
+    } catch (error) { log(`清除旧版任务栏任务失败：${error.message}\n`) }
     const configFile = prepareConfig(dataDir, path.join(process.resourcesPath, 'web'))
     backend = new Backend({
       supervisor: path.join(process.resourcesPath, 'backend', 'worklog-supervisor.exe'),
@@ -112,7 +123,7 @@ if (!app.requestSingleInstanceLock({ action })) {
         webviewTag: false, devTools: false,
       },
     })
-    minimizeOnClose(window, () => quitting)
+    hideOnClose(window, () => quitting)
     window.removeMenu()
     const contents = window.webContents
     contents.setWindowOpenHandler(() => ({ action: 'deny' }))

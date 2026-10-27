@@ -7,7 +7,7 @@ const fs = require('node:fs')
 const path = require('node:path')
 const vm = require('node:vm')
 const {
-  EXIT_ARGUMENT, launchAction, registerTaskbarExit, minimizeOnClose, handleSecondInstance,
+  EXIT_ARGUMENT, launchAction, createTray, hideOnClose, handleSecondInstance,
 } = require('../window-behavior.cjs')
 
 function mockWindow() {
@@ -15,42 +15,117 @@ function mockWindow() {
   const calls = []
   window.isDestroyed = () => false
   window.isMinimized = () => true
-  for (const name of ['minimize', 'restore', 'show', 'focus']) window[name] = () => calls.push(name)
+  for (const name of ['minimize', 'hide', 'restore', 'show', 'focus']) window[name] = () => calls.push(name)
   return { window, calls }
 }
 
-test('close minimizes instead of destroying or hiding the taskbar window', () => {
+test('close hides to the tray without minimizing, and real quit is not prevented', () => {
   const { window, calls } = mockWindow()
   let quitting = false
   let prevented = 0
-  minimizeOnClose(window, () => quitting)
+  hideOnClose(window, () => quitting)
   const event = { preventDefault() { prevented++ } }
   window.emit('close', event)
   window.emit('close', event)
   assert.equal(prevented, 2)
-  assert.deepEqual(calls, ['minimize', 'minimize'])
+  assert.deepEqual(calls, ['hide', 'hide'])
   quitting = true
   window.emit('close', event)
   assert.equal(prevented, 2, 'real quit must not be prevented')
-  assert.equal(calls.length, 2, 'real quit must not minimize again')
+  assert.equal(calls.length, 2, 'real quit must not hide again')
 })
 
-test('taskbar exit task uses the packaged executable, including paths with spaces', () => {
+test('normal minimize is not intercepted or hidden', () => {
+  const { window, calls } = mockWindow()
+  hideOnClose(window, () => false)
+  window.emit('minimize', { preventDefault() { assert.fail('native minimize must be preserved') } })
+  assert.deepEqual(calls, [])
+  assert.equal(window.listenerCount('minimize'), 0)
+})
+
+function trayFixture({ emptyIcon = false, failMenu = false } = {}) {
+  const state = { quitting: false, quitCalls: 0, window: undefined }
+  const icon = { isEmpty: () => emptyIcon }
+  let tray
+  let template
+  const options = {
+    app: { quit() { state.quitCalls++ } },
+    Tray: class extends EventEmitter {
+      constructor(image) { super(); assert.equal(image, icon); tray = this }
+      setToolTip(value) { this.tooltip = value }
+      setContextMenu(value) { this.menu = value }
+      destroy() { this.destroyed = true }
+    },
+    Menu: { buildFromTemplate(value) {
+      if (failMenu) throw new Error('menu failed')
+      template = value
+      return value
+    } },
+    nativeImage: { createFromPath(value) { assert.equal(value, 'C:\\安装目录 with spaces\\tray.ico'); return icon } },
+    iconPath: 'C:\\安装目录 with spaces\\tray.ico',
+    getWindow: () => state.window,
+    isQuitting: () => state.quitting,
+  }
+  return { state, options, tray: () => tray, template: () => template }
+}
+
+test('tray click and show menu restore, show and focus the current window', () => {
+  const fixture = trayFixture()
+  const tray = createTray(fixture.options)
+  assert.equal(tray.tooltip, 'Worklog')
+  assert.deepEqual(fixture.template().map((item) => item.label || item.type), ['显示主界面', 'separator', '退出 Worklog'])
+  tray.emit('click') // A click while the backend is still starting is harmless.
+  const { window, calls } = mockWindow()
+  fixture.state.window = window
+  tray.emit('click')
+  assert.deepEqual(calls, ['restore', 'show', 'focus'])
+  calls.length = 0
+  window.isMinimized = () => false
+  fixture.template()[0].click()
+  assert.deepEqual(calls, ['show', 'focus'], 'hidden windows must also be shown')
+  calls.length = 0
+  window.isDestroyed = () => true
+  tray.emit('click')
+  window.isDestroyed = () => false
+  fixture.state.quitting = true
+  fixture.template()[0].click()
+  assert.deepEqual(calls, [])
+})
+
+test('tray exit calls app.quit even before a window exists, but not during cleanup', () => {
+  const fixture = trayFixture()
+  createTray(fixture.options)
+  fixture.template()[2].click()
+  assert.equal(fixture.state.quitCalls, 1)
+  fixture.state.quitting = true
+  fixture.template()[2].click()
+  assert.equal(fixture.state.quitCalls, 1)
+})
+
+test('missing tray icon fails visibly instead of allowing an unreachable hidden app', () => {
+  const fixture = trayFixture({ emptyIcon: true })
+  assert.throws(() => createTray(fixture.options), /无法加载.*托盘图标/)
+  assert.equal(fixture.tray(), undefined)
+})
+
+test('tray setup failure destroys its partially initialized icon', () => {
+  const fixture = trayFixture({ failMenu: true })
+  assert.throws(() => createTray(fixture.options), /menu failed/)
+  assert.equal(fixture.tray().destroyed, true)
+})
+
+test('legacy taskbar exit arguments remain recognized without adding a new task', () => {
   const executable = 'C:\\安装目录 with spaces\\Worklog.exe'
-  let tasks
-  registerTaskbarExit({ setUserTasks(value) { tasks = value; return true } }, executable)
-  assert.equal(tasks.length, 1)
-  assert.equal(tasks[0].title, '退出 Worklog')
-  assert.equal(tasks[0].program, executable)
-  assert.equal(tasks[0].arguments, EXIT_ARGUMENT)
-  assert.equal(tasks[0].iconPath, executable)
   assert.equal(launchAction([executable, EXIT_ARGUMENT]), 'quit')
   assert.equal(launchAction([executable]), 'show')
   assert.equal(launchAction([executable, `${EXIT_ARGUMENT}=false`]), 'show')
 })
 
-test('failure to register the taskbar exit is reported instead of trapping the user', () => {
-  assert.throws(() => registerTaskbarExit({ setUserTasks() { return false } }, 'Worklog.exe'), /任务列表.*系统策略/)
+test('packaging includes the tray icon from an existing source file', () => {
+  const { build } = require('../package.json')
+  const resource = build.extraResources.find((entry) => entry.to === 'tray.ico')
+  assert.ok(resource)
+  assert.ok(fs.statSync(path.resolve(__dirname, '..', resource.from)).size > 0)
 })
 
 test('normal second launch restores and focuses the existing window', () => {
@@ -64,7 +139,7 @@ test('normal second launch restores and focuses the existing window', () => {
   assert.deepEqual(calls, ['show', 'focus'])
 })
 
-test('taskbar exit requests real quit, even before a window exists', () => {
+test('legacy taskbar exit requests real quit, even before a window exists', () => {
   const { window, calls } = mockWindow()
   let quit = 0
   const app = { quit() { quit++ } }
