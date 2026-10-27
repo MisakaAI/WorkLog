@@ -88,7 +88,8 @@ npm test
 npm run build
 ```
 
-`npm test` 包含 Node 单元和 Vue / jsdom 组件测试。  
+`npm test` 包含 Node 单元和 Vue / jsdom 组件测试。组件测试也可单独执行 `npm run test:components`；专用入口在加载测试工具前固定使用测试模式，避免继承 `NODE_ENV=production` 导致 Vue Test Utils 无法记录组件事件。不要用生产模式直接启动 Vitest 替代该入口。
+
 真实后端适配层测试必须使用一次性数据库，不能使用个人数据：
 
 ```sh

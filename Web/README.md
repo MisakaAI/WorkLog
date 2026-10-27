@@ -18,6 +18,8 @@ npm run build
 npm run preview
 ```
 
+组件测试使用 `npm run test:components`（可追加 `-- tests/components/文件名.spec.js`）。入口在加载 Vitest / Vue 前固定使用测试模式，不受父进程 `NODE_ENV=production` 影响，保证 `wrapper.emitted()` 事件断言正常；不改变应用构建配置。
+
 `npm run build` 生成完整的 `dist/`，部署时只需这个目录，无需 Node.js、源码、数据库或后端服务。  
 正式部署可使用 Nginx、Caddy 或任何静态 HTTP 服务；本地也可使用：
 
