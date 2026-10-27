@@ -3,6 +3,7 @@ package config
 import (
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
 )
@@ -24,11 +25,13 @@ func TestDefaultsAndTokenPermissions(t *testing.T) {
 	if e != nil || second.WriteToken != c.WriteToken {
 		t.Fatal("token not persistent", e)
 	}
-	if e = os.Chmod(filepath.Join(dir, "private", "token"), 0644); e != nil {
-		t.Fatal(e)
-	}
-	if _, e = Load(); e == nil {
-		t.Fatal("insecure token file accepted")
+	if runtime.GOOS != "windows" {
+		if e = os.Chmod(filepath.Join(dir, "private", "token"), 0644); e != nil {
+			t.Fatal(e)
+		}
+		if _, e = Load(); e == nil {
+			t.Fatal("insecure token file accepted")
+		}
 	}
 }
 func TestBasicPasswordLength(t *testing.T) {

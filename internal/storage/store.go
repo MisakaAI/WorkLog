@@ -62,7 +62,7 @@ func Open(ctx context.Context, driver, dsn string) (*Store, error) {
 		if err = f.Close(); err != nil {
 			return nil, err
 		}
-		u := url.URL{Scheme: "file", Path: p}
+		u := sqliteFileURL(p)
 		q := url.Values{}
 		q.Add("_pragma", "busy_timeout(5000)")
 		q.Add("_pragma", "foreign_keys(1)")
@@ -155,6 +155,7 @@ func normalize(err error) error {
 	}
 	return err
 }
+
 // Within 在独占连接上执行完整事务；回调失败或提交未成功时都会尝试回滚。
 // 同一工作台的写入由数据库串行化，保证多进程下版本校验与保存仍是原子操作。
 func (s *Store) Within(ctx context.Context, user string, write bool, fn func(repository.Unit) error) (err error) {
@@ -459,7 +460,11 @@ func (s *Store) Backup(ctx context.Context, destination string) error {
 	return f.Sync()
 }
 func VerifySQLite(ctx context.Context, path string) error {
-	u := url.URL{Scheme: "file", Path: path}
+	p, e := filepath.Abs(path)
+	if e != nil {
+		return e
+	}
+	u := sqliteFileURL(p)
 	q := url.Values{"mode": {"ro"}, "_pragma": {"foreign_keys(1)"}}
 	u.RawQuery = q.Encode()
 	db, e := sql.Open("sqlite", u.String())

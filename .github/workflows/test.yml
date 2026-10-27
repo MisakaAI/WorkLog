@@ -3,6 +3,17 @@ on: [push, pull_request]
 permissions:
   contents: read
 jobs:
+  windows-sqlite:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+      - name: Windows configuration, SQLite paths, backup and restore
+        run: go test ./internal/config ./internal/storage ./cmd/worklog ./desktop/supervisor
+      - name: Windows SQLite integration
+        run: go test ./internal/integration -run SQLite
   test:
     runs-on: ubuntu-latest
     services:

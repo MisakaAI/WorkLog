@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
 )
@@ -37,8 +38,12 @@ func TestLoadFileIgnoresEnvironment(t *testing.T) {
 			t.Fatal("file settings/defaults not applied correctly")
 		}
 	}
-	if info, err := os.Stat(token); err != nil || info.Mode().Perm() != 0600 {
-		t.Fatal("file-configured token not created securely", err)
+	info, err := os.Stat(token)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !info.Mode().IsRegular() || (runtime.GOOS != "windows" && info.Mode().Perm() != 0600) {
+		t.Fatal("file-configured token not created securely", info.Mode())
 	}
 }
 

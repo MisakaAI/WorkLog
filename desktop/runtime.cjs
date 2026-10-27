@@ -19,7 +19,7 @@ function prepareConfig(dataDir, staticDir) {
   if (!/^[a-f0-9]{64}$/.test(token)) throw new Error('桌面 MCP 令牌文件损坏，请从备份恢复或移走 mcp-token 后重试。')
   const configFile = path.join(dataDir, 'backend.json')
   // --conf ignores inherited WORKLOG_* variables. Supply the stable token
-  // explicitly: Go's Unix 0600 token-file check is not meaningful on Windows.
+  // explicitly so the desktop and backend share the same persistent credential.
   const config = {
     addr: '127.0.0.1:0', db_driver: 'sqlite',
     db_dsn: path.join(dataDir, 'worklog.db'),

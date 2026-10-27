@@ -86,12 +86,21 @@ desktop/dist/win-unpacked/resources/BUILD-INFO.json
 
 ## 端口、界面与安全边界
 
-1. Electron 在用户目录准备配置，以 `--conf` 启动**原始后端**，设置 `addr=127.0.0.1:0`、SQLite 路径、包内静态目录及稳定令牌。显式 `write_token` 也避免了现有 Go 的 Unix `0600` 令牌文件检查与 Windows 文件权限语义不兼容的问题，无需修改该检查。
+1. Electron 在用户目录准备配置，以 `--conf` 启动**原始后端**，设置 `addr=127.0.0.1:0`、SQLite 路径、包内静态目录及稳定令牌。显式 `write_token` 确保桌面层与后端使用同一个持久凭证。后端读取令牌文件时始终要求普通文件；Unix 另检查私有权限，Windows 使用文件系统 ACL，不把 Go 返回的模拟权限位当作 Unix `0600`。
 2. 后端自己调用原有 `ListenAndServe`，由操作系统实际绑定可用动态端口。监管进程通过 `GetExtendedTcpTable` 获取**该后端 PID 的 IPv4 回环监听端口**，仅向 Electron 主进程报告。没有预占/释放空闲端口，也不解析含糊的启动日志，不绑定公网地址。
 3. Electron 检查 `/healthz` 的 `200 {"ok":true}`，再加载同源 `http://127.0.0.1:<实际端口>/`。Go 原有 `/config.js` 动态提供 `/api`，不需要改 Vue API 地址或建立反向代理。
 4. 关闭 Node 集成、启用 context isolation / renderer sandbox，不使用 preload、关闭开发者工具；禁止弹窗、webview、权限申请、外部导航及外部网络资源，允许同源 API/资源、同源 blob worker/导出和 data 图片/字体。CSP 的 inline script/style 仅用于兼容现有页面和编辑器，不启用 eval。
 
 桌面 REST 沿用原应用的本机免密模式；**其他同机进程仍可访问本机端口，不构成同机安全隔离**。动态端口每次可能变化，不能把它当作固定 Web/MCP 部署地址。浏览器主题等 origin-scoped 偏好可能随端口变化而重置；业务数据始终在稳定 SQLite 文件中。
+
+## 启动时报 SQLite 错误或 `chmod 600`
+
+旧版存在两个独立的 Windows 兼容性问题：
+
+- 日志为 `initialize_sqlite_database` → `ping_database`、`sqlite_code: 1`：Windows 绝对路径未经转换就构造 `file:` URI，盘符被当成 URI authority，SQLite 拒绝连接。后端现在先转换反斜杠并为盘符添加前导 `/`，生成 `file:///C:/...`；打开数据库和备份校验共用此转换，空格、中文、`#`、`%` 也会正确转义。
+- 单独运行后端提示 `token file must be regular and private (chmod 600)`：旧版错误地在 Windows 上检查 Unix 权限位，已有令牌在再次读取时会被拒绝。Windows 不使用 `chmod 600`，应通过用户目录的 ACL 保护令牌。此错误与桌面端的 SQLite 连接失败不是同一个故障；桌面端显式提供 `write_token`，不会触发此文件权限检查。
+
+重新构建并完整解压新版桌面包后启动，**无需删除数据库、令牌或 `%APPDATA%\\WorklogDesktop`**。直接运行 `resources\\backend\\worklog.exe` 不会自动使用桌面配置；若要操作桌面数据库，请使用 `--conf "%APPDATA%\\WorklogDesktop\\backend.json"`，否则它会按当前工作目录和 `WORKLOG_*` 环境变量加载独立配置。
 
 ## 启动时报 `Cannot read properties of undefined (reading 'appId')`
 
@@ -124,6 +133,8 @@ powershell -NoProfile -ExecutionPolicy Bypass -File .\desktop\tests\windows-smok
 ```
 
 测试在独立的 `%LOCALAPPDATA%\WorklogDesktop-smoke-<随机值>` 目录中创建再清理测试数据，不碰真实桌面数据；检查端口归属与仅回环监听、健康检查、Vue 入口和同源配置、创建/读取待办、重启持久化、管道关闭/监管进程强杀后的后端清理。
+
+CI 另在原生 `windows-latest` 上运行配置/令牌重载、SQLite 特殊字符路径、备份校验/恢复、SQLite 集成及监管进程单元测试。这些测试不能代替桌面 GUI 和 Job Object 生命周期的手动验收。
 
 还必须在 Windows 实体机或虚拟机手动检查：
 

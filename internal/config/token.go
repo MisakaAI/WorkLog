@@ -5,6 +5,7 @@ import (
 	"encoding/hex"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"time"
 
@@ -21,7 +22,9 @@ func loadOrCreateToken(path string) (string, error) {
 			if e != nil {
 				return "", e
 			}
-			if !info.Mode().IsRegular() || info.Mode().Perm()&0077 != 0 {
+			// Windows synthesizes POSIX mode bits (0666/0444); rely on OS ACLs
+			// there instead, but require a regular file on every platform.
+			if !info.Mode().IsRegular() || (runtime.GOOS != "windows" && info.Mode().Perm()&0077 != 0) {
 				return "", diagnostics.Safe("token file must be regular and private (chmod 600)")
 			}
 			token := strings.TrimSpace(string(b))
