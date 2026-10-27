@@ -78,7 +78,7 @@ func TestHTTPBudgetsAndStaticBoundary(t *testing.T) {
 	must(t, os.MkdirAll(filepath.Join(dir, "assets"), 0700))
 	must(t, os.MkdirAll(filepath.Join(dir, "data"), 0700))
 	calendarJSON := `{"workingWeekdays":[1,2,3,4,5],"holidays":[],"adjustedWorkdays":[]}`
-	for name, contents := range map[string]string{"index.html": "<html>worklog</html>", "assets/app-hash.js": "console.log('app')", "data/worklog.db": "private database", "README.md": "private source", "work-calendar.json": calendarJSON, "config.json": "private config"} {
+	for name, contents := range map[string]string{"index.html": "<html>worklog</html>", "assets/app-hash.js": "console.log('app')", "data/worklog.db": "private database", "README.md": "private source", "work-calendar.json": calendarJSON, "config.json": `{"write_token":"private-disk-token","db_dsn":"private-disk-dsn"}`, "config.js": "window.WORKLOG_CONFIG = {secret: 'private-legacy-script'}"} {
 		must(t, os.WriteFile(filepath.Join(dir, name), []byte(contents), 0600))
 	}
 	outside := filepath.Join(t.TempDir(), "private.js")
@@ -89,6 +89,9 @@ func TestHTTPBudgetsAndStaticBoundary(t *testing.T) {
 	cfg.BasicUser = "human"
 	cfg.BasicPassword = "private-human-password"
 	cfg.StaticDir = dir
+	cfg.Timezone = "Pacific/Auckland"
+	cfg.DSN = "private-server-dsn"
+	cfg.TokenFile = "private-token-file"
 	server := httptest.NewServer(rest.New(f.svc, cfg, logger))
 	defer server.Close()
 	f.server = server
@@ -122,7 +125,7 @@ func TestHTTPBudgetsAndStaticBoundary(t *testing.T) {
 			t.Fatal(code)
 		}
 	}
-	for _, path := range []string{"/data/worklog.db", "/README.md", "/go.mod", "/assets/escape.js", "/assets/", "/.env", "/config.json"} {
+	for _, path := range []string{"/data/worklog.db", "/README.md", "/go.mod", "/assets/escape.js", "/assets/", "/.env", "/config.js"} {
 		code, _, _ := get(path)
 		if code != 404 {
 			t.Fatal(path, code)
@@ -146,9 +149,21 @@ func TestHTTPBudgetsAndStaticBoundary(t *testing.T) {
 	if code != 200 || !strings.Contains(h.Get("Cache-Control"), "private, max-age=") {
 		t.Fatal(code, h)
 	}
-	code, _, body := get("/config.js")
-	if code != 200 || !strings.Contains(body, "apiBaseUrl: '/api'") {
-		t.Fatal(code, body)
+	code, h, body := get("/config.json")
+	if code != 200 || !strings.Contains(h.Get("Content-Type"), "application/json") || !strings.Contains(h.Get("Cache-Control"), "no-store") {
+		t.Fatal("public configuration response", code, h)
+	}
+	var publicConfig map[string]any
+	must(t, json.Unmarshal([]byte(body), &publicConfig))
+	// An exact field allowlist prevents credentials, database paths and other
+	// server settings (or the private on-disk config.json) from reaching browsers.
+	if len(publicConfig) != 2 || publicConfig["apiBaseUrl"] != "/api" || publicConfig["businessTimezone"] != cfg.Timezone {
+		t.Fatal("public configuration must contain only the configured browser settings")
+	}
+	for _, secret := range []string{cfg.WriteToken, cfg.ReadToken, cfg.BasicPassword, cfg.DSN, cfg.TokenFile, "private-disk-token", "private-disk-dsn", "private-legacy-script"} {
+		if strings.Contains(body, secret) {
+			t.Fatal("public configuration leaked private settings")
+		}
 	}
 	nav, e := http.NewRequest("GET", server.URL+"/", nil)
 	must(t, e)

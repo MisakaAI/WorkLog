@@ -14,8 +14,8 @@ export WORKLOG_MCP_TOKEN="$(cat ./data/mcp-token)"
 codex
 ```
 
-若服务显式设置了 `WORKLOG_WRITE_TOKEN`，应安全地将该值注入客户端环境，而不是读取可能过期的文件。  
-只读 AI 使用服务配置的 `WORKLOG_READ_TOKEN`。
+若服务 JSON 显式设置了 `write_token`，应安全地将该值注入客户端环境，而不是读取可能过期的文件。
+只读 AI 使用服务配置的 `read_token`。服务通过 `./bin/worklog --conf /absolute/path/config.json` 启动，业务配置不从环境变量读取。
 
 `~/.codex/config.toml`：
 
@@ -26,7 +26,7 @@ bearer_token_env_var = "WORKLOG_MCP_TOKEN"
 ```
 
 远程 URL 改为 `https://worklog.example.com/mcp`，由 Nginx 保留 Authorization、Host、Origin 并代理。  
-客户端环境变量名可自定，与 `bearer_token_env_var` 一致即可。
+`bearer_token_env_var` 是 **Codex 第三方客户端配置，不是 Worklog 服务端配置**；上面的 `export` 仅向 Codex 提供凭证。客户端环境变量名可自定，与该字段一致即可。
 
 ## 其他 Streamable HTTP 客户端
 
@@ -50,22 +50,27 @@ Claude Desktop 等兼容客户端可配置：
   "mcpServers": {
     "worklog": {
       "command": "/absolute/path/WorkLog/bin/worklog",
-      "args": ["stdio"],
-      "env": {
-        "WORKLOG_DB_DRIVER": "sqlite",
-        "WORKLOG_DB_DSN": "/absolute/path/WorkLog/data/worklog.db",
-        "WORKLOG_TOKEN_FILE": "/absolute/path/WorkLog/data/mcp-token",
-        "WORKLOG_STATIC_DIR": "",
-        "WORKLOG_MCP_ALLOW_DESTRUCTIVE": "false",
-        "WORKLOG_STDIO_READ_ONLY": "false"
-      }
+      "args": ["--conf", "/absolute/path/stdio.json", "stdio"]
     }
   }
 }
 ```
 
-替换所有绝对路径。stdio 身份由可信 OS 用户与启动环境决定，stdout 仅传协议、日志写 stderr。  
-可与 HTTP 进程共享同一本地 SQLite 文件，但不能并行运行不同版本的升级迁移。只读客户端设置 `WORKLOG_STDIO_READ_ONLY=true`。
+独立的 `/absolute/path/stdio.json` 示例（这是服务业务配置，不是客户端配置）：
+
+```json
+{
+  "db_driver": "sqlite",
+  "db_dsn": "/absolute/path/WorkLog/data/worklog.db",
+  "token_file": "/absolute/path/WorkLog/data/mcp-token",
+  "static_dir": "",
+  "mcp_allow_destructive": false,
+  "stdio_read_only": false
+}
+```
+
+替换所有绝对路径，并确保 `user_id` 与 HTTP 配置一致（默认 `owner`）。配置文件仅允许可信 OS 用户读取，不要提交凭证。stdio 身份由可信 OS 用户与 JSON 配置决定，stdout 仅传协议、日志写 stderr。
+可与 HTTP 进程共享同一本地 SQLite 文件，但不能并行运行不同版本的升级迁移。只读客户端在独立 JSON 中设置 `"stdio_read_only": true`。
 
 ## 工具列表
 
@@ -87,5 +92,5 @@ Claude Desktop 等兼容客户端可配置：
 - `move_task` 原子修改项目和状态；`set_todo_done` 接受 boolean，不是 toggle。
 - 工具业务失败返回 `isError`，正文含与 REST 一致的公开 error code/message；不要把错误当作成功响应继续修改。
 - MCP 修改会提升工作台根 revision，旧浏览器标签页保存时可能收到 409。
-- 默认禁止删除、批量分类管理和保存空日志。模型确认参数不能授权；是否开启 `WORKLOG_MCP_ALLOW_DESTRUCTIVE` 由运维决定。
+- 默认禁止删除、批量分类管理和保存空日志。模型确认参数不能授权；是否在服务 JSON 中开启 `mcp_allow_destructive` 由运维决定。
 - 工具审计记录可信身份、工具、写入类型、结果和耗时，不记录私人参数。

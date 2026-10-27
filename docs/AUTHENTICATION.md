@@ -3,10 +3,12 @@
 ## 1. 身份模型
 
 Worklog 是受保护的**单用户服务**，没有注册、登录页面、用户管理或 OAuth 授权服务器。  
-所有受信客户端访问 `WORKLOG_USER_ID` 指定的工作台（默认 `owner`），不能通过请求体、工具参数或 `X-Forwarded-User` 选择用户。
+所有受信客户端访问 JSON 配置中 `user_id` 指定的工作台（默认 `owner`），不能通过请求体、工具参数或 `X-Forwarded-User` 选择用户。
 
 浏览器 Basic、Bearer 读写令牌和 stdio 是独立的认证渠道，不是不同用户账号。  
-内部数据按用户标识隔离不等于已经提供多用户产品；不要把更改 `WORKLOG_USER_ID` 当作登录切换功能。
+内部数据按用户标识隔离不等于已经提供多用户产品；不要把更改 `user_id` 当作登录切换功能。
+
+服务业务配置仅使用 JSON，通过 `./bin/worklog --conf /absolute/path/config.json` 启动；不从环境变量或 `.env` 读取业务配置。下文 JSON 片段应合并到该配置文件，修改后重启生效。
 
 ## 2. 认证渠道与权限
 
@@ -26,7 +28,7 @@ Worklog 是受保护的**单用户服务**，没有注册、登录页面、用�
 只有以下条件同时满足才允许：
 
 - Go 服务绑定 loopback 地址。
-- 未设置 `WORKLOG_BASIC_PASSWORD`。
+- `basic_password` 为空。
 - 请求没有 `Authorization` 头。
 - 请求 Host 和实际远端地址都是 loopback。
 - 请求通过 Host / Origin 等安全检查。
@@ -35,14 +37,18 @@ Worklog 是受保护的**单用户服务**，没有注册、登录页面、用�
 设置 Basic 密码会关闭匿名 REST；给出错误的 Authorization 也不会退回匿名模式。
 
 **同机其他进程也能访问匿名 REST。** 这不是同机 agent 沙箱。  
-即使配置密码，能读取 `.env`、令牌或数据库的进程仍可绕过预期隔离，需要 OS 用户、文件权限或容器边界配合。
+即使配置密码，能读取配置 JSON、令牌或数据库的进程仍可绕过预期隔离，需要 OS 用户、文件权限或容器边界配合。
 
 ### 浏览器 Basic
 
-```sh
-export WORKLOG_BASIC_USER=worklog
-export WORKLOG_BASIC_PASSWORD="$(openssl rand -hex 24)"
+```json
+{
+  "basic_user": "worklog",
+  "basic_password": "<替换为独立随机密码，至少8字节>"
+}
 ```
+
+可用 `openssl rand -hex 24` 生成密码，再安全写入 JSON；不要直接使用示例占位值。
 
 用户名默认 `worklog`；非空密码至少 **8 字节**。  
 浏览器弹出原生认证提示，前端不保存令牌，不新增登录 UI。Basic 可读写和删除，面向人类浏览器的删除仍使用现有确认交互。
@@ -52,48 +58,53 @@ Basic 不是加密方式，只能经 HTTPS 用于远程访问。
 
 ### Bearer 令牌
 
-```sh
-export WORKLOG_WRITE_TOKEN="$(openssl rand -hex 32)"
-export WORKLOG_READ_TOKEN="$(openssl rand -hex 32)"  # 可选
+```json
+{
+  "write_token": "<替换为独立随机写令牌，至少32字节>",
+  "read_token": "<替换为独立随机只读令牌，至少32字节>"
+}
 ```
 
-两个令牌均至少 **32 字节**，且必须不同。它们也应与 Basic 密码独立。  
-支持 `Authorization: Bearer <token>`（scheme 不区分大小写），不要放在 URL、工具参数、前端 `config.js` 或源码中。
+分别用 `openssl rand -hex 32` 生成令牌并安全写入 JSON；`read_token` 可省略。
 
-本地未配置写令牌时，服务自动读取／生成 `WORKLOG_TOKEN_FILE`（默认 `./data/mcp-token`）。文件以 0600 权限创建，不输出令牌到日志。  
+两个令牌均至少 **32 字节**，且必须不同。它们也应与 Basic 密码独立。  
+支持 `Authorization: Bearer <token>`（scheme 不区分大小写），不要放在 URL、工具参数、前端公开 `config.json` 或源码中。
+
+本地未配置写令牌时，服务自动读取／生成 `token_file`（默认 `./data/mcp-token`）。文件以 0600 权限创建，不输出令牌到日志。
 非 loopback 绑定必须显式设置写令牌和 Basic 密码，不能依赖自动生成绕过启动要求。显式设置写令牌后，令牌文件不是该次服务的有效凭证来源。
 
-REST 和 MCP 可共用写令牌，但 REST Bearer 不获得删除／清空权限。只读 AI 应使用独立的 `WORKLOG_READ_TOKEN`。
+REST 和 MCP 可共用写令牌，但 REST Bearer 不获得删除／清空权限。只读 AI 应使用独立的 `read_token`。
 
-调用示例（令牌从安全环境注入）：
+调用示例（`CLIENT_READ_TOKEN` 由客户端安全环境注入，不是服务端配置）：
 
 ```sh
 curl https://worklog.example.com/api/today \
-  -H "Authorization: Bearer $WORKLOG_READ_TOKEN"
+  -H "Authorization: Bearer $CLIENT_READ_TOKEN"
 ```
 
 不要在日志、截图或共享终端中输出凭证。HTTP MCP 配置见 [MCP 指南](MCP.md)。
 
 ### stdio
 
-stdio 由启动进程的可信本机 OS 用户及环境配置提供身份，不要求 HTTP Bearer，也不接受模型指定 userId。  
+stdio 由启动进程的可信本机 OS 用户及 JSON 配置提供身份，不要求 HTTP Bearer，也不接受模型指定 userId。
 该进程直接访问数据库，启动它本身就是授权行为。
 
-- `WORKLOG_STDIO_READ_ONLY=true`：强制只读。
-- `WORKLOG_MCP_ALLOW_DESTRUCTIVE=true`：允许具有写权限的 stdio / MCP 客户端执行破坏性操作。
+- `"stdio_read_only": true`：强制只读。
+- `"mcp_allow_destructive": true`：允许具有写权限的 stdio / MCP 客户端执行破坏性操作。
 - stdout 仅输出 MCP 协议，日志写入 stderr。
 
-不要把包含数据库访问能力的 stdio 配置交给不可信用户；限制数据库目录和进程环境的读取权限。
+不要把包含数据库访问能力的 stdio 配置交给不可信用户；限制配置文件和数据库目录的读取权限。
 
 ## 3. 破坏性授权
 
 默认 MCP 禁止删除项目／任务／待办、批量分类管理及保存空日志。模型给出 `confirm: true` 或文字确认都不能解锁。
 
-运维可在可信服务端环境设置：
+运维可在可信服务端 JSON 配置中设置并重启服务：
 
-```sh
-export WORKLOG_MCP_ALLOW_DESTRUCTIVE=true
-# 重启服务后生效
+```json
+{
+  "mcp_allow_destructive": true
+}
 ```
 
 这是**长期能力授权，不是逐次用户审批**：开启后，该服务的 MCP 写令牌持有人即具备对应能力，所有连接该服务的写客户端都会受影响。  
@@ -103,8 +114,8 @@ export WORKLOG_MCP_ALLOW_DESTRUCTIVE=true
 
 ## 4. Host、Origin 与反向代理
 
-- `WORKLOG_ALLOWED_HOSTS`：逗号分隔主机名，不含协议和端口，例如 `worklog.example.com,localhost,127.0.0.1`。
-- `WORKLOG_ALLOWED_ORIGINS`：逗号分隔的**精确 Origin**，包含协议及非默认端口，不带路径或末尾 `/`，例如 `https://worklog.example.com`。
+- `allowed_hosts`：主机名 JSON 数组，不含协议和端口，例如 `["worklog.example.com", "localhost", "127.0.0.1"]`。
+- `allowed_origins`：**精确 Origin** 的 JSON 数组，包含协议及非默认端口，不带路径或末尾 `/`，例如 `["https://worklog.example.com"]`。
 - 直接同源请求可通过同源检查；TLS 在 Nginx 终止后，Go 看到的是 HTTP，因此必须显式加入外部 HTTPS Origin。
 - 保留原始 Host、Origin、Authorization，不要将 Host 改成 `127.0.0.1` 来绕过检查。
 - 不信任 `X-Forwarded-User` 等身份头，也不以 `X-Forwarded-Proto` 作为认证依据。
@@ -121,10 +132,10 @@ Nginx 示例见[部署与配置](DEPLOYMENT.md#nginx-https-反向代理)。
 
 ## 5. 凭证保管与轮换
 
-- `.env` 建议 0600，数据目录以 0700、数据库／令牌／备份以 0600 创建；已有目录不会自动修正权限。
+- 配置 JSON 建议 0600，数据目录以 0700、数据库／令牌／备份以 0600 创建；已有目录不会自动修正权限。
 - 使用独立随机凭证，不把凭证提交到仓库或放入可公开读取的静态目录。
-- 更新环境变量后重启服务，再更新客户端。当前每类令牌仅支持一个有效值，没有双令牌平滑轮换机制。
-- 使用自动令牌文件时，停止相关服务、在安全位置替换令牌文件并保持 0600，再重启和更新客户端。若设置了 `WORKLOG_WRITE_TOKEN`，应轮换该环境变量而不是只替换文件。
+- 更新 JSON 中的凭证后重启服务，再更新客户端。当前每类令牌仅支持一个有效值，没有双令牌平滑轮换机制。
+- 使用自动令牌文件时，停止相关服务、在安全位置替换令牌文件并保持 0600，再重启和更新客户端。若设置了 `write_token`，应轮换 JSON 中的该字段而不是只替换文件。
 - 泄露后应立即轮换并检查访问日志；泄露数据库或备份时，仅轮换令牌不能撤回已经泄露的数据。
 
 ## 6. 限额、日志与公网防护

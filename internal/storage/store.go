@@ -18,7 +18,7 @@ import (
 	"time"
 
 	"github.com/jackc/pgx/v5/pgconn"
-	_ "github.com/jackc/pgx/v5/stdlib"
+	"github.com/jackc/pgx/v5/stdlib"
 	"github.com/pressly/goose/v3"
 	"github.com/pressly/goose/v3/lock"
 	"modernc.org/sqlite"
@@ -39,6 +39,8 @@ type Store struct {
 func Open(ctx context.Context, driver, dsn string) (*Store, error) {
 	s := &Store{postgres: driver == "postgres"}
 	var dialect goose.Dialect
+	var db *sql.DB
+	var err error
 	switch driver {
 	case "sqlite":
 		if dsn == "" {
@@ -71,14 +73,22 @@ func Open(ctx context.Context, driver, dsn string) (*Store, error) {
 		dsn = u.String()
 		dialect = goose.DialectSQLite3
 	case "postgres":
-		driver = "pgx"
+		config, e := postgresConfig(dsn)
+		if e != nil {
+			return nil, e
+		}
+		// Pass the parsed config directly: sql.Open("pgx", dsn) would parse
+		// again when connecting and could pick up subsequent environment changes.
+		db = stdlib.OpenDB(*config)
 		dialect = goose.DialectPostgres
 	default:
 		return nil, diagnostics.Safe("unsupported database driver")
 	}
-	db, err := sql.Open(driver, dsn)
-	if err != nil {
-		return nil, err
+	if db == nil {
+		db, err = sql.Open(driver, dsn)
+		if err != nil {
+			return nil, err
+		}
 	}
 	s.DB = db
 	fail := func(e error) (*Store, error) { _ = db.Close(); return nil, e }

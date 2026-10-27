@@ -1,6 +1,6 @@
 # 工作日历自定义
 
-工作日、节假日和调休由前端的一份 JSON 文件控制，不需要在后端 `config.json` 中配置 `calendar_file`，也不需要设置 `WORKLOG_CALENDAR_FILE`。旧配置项已移除，升级时请删除；旧的浏览器 `worklog.v2.calendar` 数据不再读取。
+工作日、节假日和调休仅由前端的一份 JSON 文件控制，后端 `config.json` 不提供日历配置项。旧的浏览器 `worklog.v2.calendar` 数据不再读取。
 
 ## 文件位置与生效方式
 

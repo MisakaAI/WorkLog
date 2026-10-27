@@ -18,10 +18,10 @@ func validateStaticDir(c Config) error {
 		return diagnostics.Wrap("resolve_static_directory", err)
 	}
 	if filepath.Dir(root) == root {
-		return diagnostics.Safe("STATIC_DIR must be a dedicated front-end build directory")
+		return diagnostics.Safe("static_dir must be a dedicated front-end build directory")
 	}
 	if _, err := os.Stat(filepath.Join(root, "go.mod")); err == nil {
-		return diagnostics.Safe("STATIC_DIR must not be the source root")
+		return diagnostics.Safe("static_dir must not be the source root")
 	}
 	tokenFile := c.TokenFile
 	if tokenFile == "" {
@@ -41,7 +41,7 @@ func validateStaticDir(c Config) error {
 		}
 		rel, err := filepath.Rel(root, path)
 		if err == nil && rel != ".." && !strings.HasPrefix(rel, ".."+string(filepath.Separator)) {
-			return diagnostics.Safe("STATIC_DIR must not contain database, token, configuration or backup paths")
+			return diagnostics.Safe("static_dir must not contain db_dsn, token_file, configuration or backup paths")
 		}
 	}
 	return nil

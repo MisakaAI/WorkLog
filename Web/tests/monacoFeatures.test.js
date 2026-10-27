@@ -3,7 +3,9 @@ import assert from 'node:assert/strict'
 import { readFileSync, existsSync } from 'node:fs'
 import { fileURLToPath } from 'node:url'
 import { runInNewContext } from 'node:vm'
-import config from '../vite.config.js'
+import viteConfig from '../vite.config.js'
+
+const config = viteConfig({ command: 'build', mode: 'production' })
 
 const read = path => readFileSync(new URL(path, import.meta.url), 'utf8')
 const features = read('../src/monacoFeatures.js')

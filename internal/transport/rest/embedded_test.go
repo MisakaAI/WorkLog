@@ -5,7 +5,6 @@ import (
 	"log/slog"
 	"net/http"
 	"net/http/httptest"
-	"strings"
 	"testing"
 	"testing/fstest"
 
@@ -16,7 +15,8 @@ func TestEmbeddedResourcesKeepSecurityAndRuntimeConfig(t *testing.T) {
 	assets := fstest.MapFS{
 		"index.html":       {Data: []byte("embedded-ui")},
 		"assets/editor.js": {Data: []byte("embedded-worker")},
-		"config.js":        {Data: []byte("wrong-placeholder")},
+		"config.json":      {Data: []byte("wrong-placeholder")},
+		"config.js":        {Data: []byte("obsolete-script")},
 		"secret.db":        {Data: []byte("never-public")},
 	}
 	for _, password := range []string{"", "password-123"} {
@@ -36,24 +36,30 @@ func TestEmbeddedResourcesKeepSecurityAndRuntimeConfig(t *testing.T) {
 			h.ServeHTTP(w, r)
 			return w
 		}
-		if password != "" && request("/", "127.0.0.1:43210", "", false).Code != 401 {
-			t.Fatal("embedded UI bypassed Basic authentication")
+		for _, path := range []string{"/", "/config.json"} {
+			if password != "" && request(path, "127.0.0.1:43210", "", false).Code != 401 {
+				t.Fatal("embedded UI/config bypassed Basic authentication")
+			}
 		}
-		for _, path := range []string{"/", "/assets/editor.js", "/config.js"} {
+		for _, path := range []string{"/", "/assets/editor.js", "/config.json"} {
 			w := request(path, "127.0.0.1:43210", "http://127.0.0.1:43210", password != "")
 			if w.Code != 200 {
 				t.Fatal(path, w.Code, w.Body.String())
 			}
-			if path == "/config.js" && (!strings.Contains(w.Body.String(), "apiBaseUrl: '/api'") || strings.Contains(w.Body.String(), "placeholder")) {
-				t.Fatal("runtime config was not generated")
+			if path == "/config.json" {
+				assertPublicRuntimeConfig(t, w, c.Timezone)
 			}
 		}
-		if request("/secret.db", "127.0.0.1:43210", "", password != "").Code != 404 {
-			t.Fatal("embedded path allowlist bypassed")
+		for _, path := range []string{"/secret.db", "/config.js"} {
+			if request(path, "127.0.0.1:43210", "", password != "").Code != 404 {
+				t.Fatal("embedded path allowlist bypassed", path)
+			}
 		}
-		if request("/", "evil.example", "", password != "").Code != 403 ||
-			request("/", "127.0.0.1:43210", "http://evil.example", password != "").Code != 403 {
-			t.Fatal("Host/Origin restrictions bypassed")
+		for _, path := range []string{"/", "/config.json"} {
+			if request(path, "evil.example", "", password != "").Code != 403 ||
+				request(path, "127.0.0.1:43210", "http://evil.example", password != "").Code != 403 {
+				t.Fatal("Host/Origin restrictions bypassed", path)
+			}
 		}
 	}
 }

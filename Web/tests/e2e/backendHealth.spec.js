@@ -25,7 +25,7 @@ test('真实健康接口显示墨绿色，检查失败变深红，恢复后自�
 test('未配置后端保留原色，页面可用且不发送健康检查或业务 API 请求', async ({ page }) => {
   const apiRequests = []
   page.on('request', request => { if (new URL(request.url()).pathname.startsWith('/api/')) apiRequests.push(request.url()) })
-  await page.route('**/config.js', route => route.fulfill({ contentType: 'text/javascript', body: "window.WORKLOG_CONFIG = { apiBaseUrl: '' };" }))
+  await page.route('**/config.json', route => route.fulfill({ json: { apiBaseUrl: '' } }))
   await page.goto('/')
   const dot = page.locator('.brand-word > span')
   await expect(dot).toHaveAttribute('data-backend-status', 'unconfigured')

@@ -82,9 +82,12 @@ func NewWithStaticFS(svc *service.Service, c config.Config, logger *slog.Logger,
 		DisableLocalhostProtection: true})
 	r.Handle("/mcp", mh)
 	if assets != nil || c.StaticDir != "" {
-		r.Get("/config.js", func(w http.ResponseWriter, r *http.Request) {
-			w.Header().Set("Content-Type", "text/javascript; charset=utf-8")
-			_, _ = fmt.Fprintf(w, "window.WORKLOG_CONFIG = { apiBaseUrl: '/api', businessTimezone: %q };", c.Timezone)
+		r.Get("/config.json", func(w http.ResponseWriter, r *http.Request) {
+			// Public browser settings only; never serialize the server Config.
+			respond(w, struct {
+				APIBaseURL       string `json:"apiBaseUrl"`
+				BusinessTimezone string `json:"businessTimezone"`
+			}{APIBaseURL: "/api", BusinessTimezone: c.Timezone})
 		})
 		r.Get("/*", s.static)
 	}

@@ -15,15 +15,19 @@ function monacoHTMLWorkerBridge() {
 }
 
 // https://vite.dev/config/
-export default defineConfig({
+export default defineConfig(({ command, isPreview }) => ({
   base: './',
-  // 开发时设置 VITE_API_BASE_URL=/api，保持与生产同源部署一致。
+  // 开发直接使用 Go 派生的公开 JSON（含业务时区），无需环境变量。
+  // preview 也不能继承开发代理；独立静态发布始终默认本地模式。
   server: {
-    proxy: { '/api': { target: 'http://127.0.0.1:12450', changeOrigin: false } },
+    proxy: command === 'serve' && !isPreview ? {
+      '/api': { target: 'http://127.0.0.1:12450', changeOrigin: false },
+      '/config.json': { target: 'http://127.0.0.1:12450', changeOrigin: false },
+    } : undefined,
   },
   plugins: [vue(), { ...monacoHTMLWorkerBridge(), enforce: 'pre' }],
   // 开发预构建也必须使用相同桥接，避免 HTML 懒加载后重新引入全量功能。
   optimizeDeps: {
     rolldownOptions: { plugins: [monacoHTMLWorkerBridge()] },
   },
-})
+}))

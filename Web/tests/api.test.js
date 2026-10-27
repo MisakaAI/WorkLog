@@ -104,6 +104,7 @@ test('HTTP 错误保留 code、status、requestId，供冲突处理与排障', a
 test('发布目录没有示例 API 文件，支持运行时配置与相对子路径构建', () => {
   assert.ok(!readdirSync(new URL('../public/', import.meta.url)).includes('api'))
   const html = readFileSync(new URL('../index.html', import.meta.url), 'utf8')
-  assert.ok(html.indexOf('src="./config.js"') < html.indexOf('src="/src/main.js"'))
+  assert.match(html, /src="\/src\/bootstrap\.js"/)
+  assert.doesNotMatch(html, /src="\.\/config\.js"|src="\/src\/main\.js"/)
   assert.match(readFileSync(new URL('../vite.config.js', import.meta.url), 'utf8'), /base: '\.\/'/)
 })

@@ -9,12 +9,8 @@ import (
 )
 
 func TestLoadFileIgnoresEnvironment(t *testing.T) {
-	t.Setenv("WORKLOG_ADDR", "0.0.0.0:9000")
-	t.Setenv("WORKLOG_DB_DRIVER", "invalid")
-	t.Setenv("WORKLOG_TOKEN_FILE", "/not-used/token")
+	poisonBusinessEnvironment(t)
 	t.Setenv("WORKLOG_STDIO_READ_ONLY", "false")
-	t.Setenv("WORKLOG_TIMEZONE", "invalid")
-	t.Setenv("WORKLOG_MCP_ALLOW_DESTRUCTIVE", "true")
 	dir := t.TempDir()
 	path := filepath.Join(dir, "config.json")
 	token := filepath.Join(dir, "private", "token")

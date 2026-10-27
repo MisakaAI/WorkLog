@@ -78,7 +78,7 @@ func TestHTTPRestartRetainsBusinessDataAndAuthentication(t *testing.T) {
 	if code, body := request(http.MethodGet, "/api/tasks", "", true); code != 200 || !strings.Contains(body, "survives-http-restart") {
 		t.Fatal("business data missing after restart", code, body)
 	}
-	for _, path := range []string{"/", "/api/tasks", "/config.js"} {
+	for _, path := range []string{"/", "/api/tasks", "/config.json"} {
 		if code, _ := request(http.MethodGet, path, "", false); code != 401 {
 			t.Fatal("restart bypassed authentication", path, code)
 		}

@@ -29,13 +29,13 @@ go build -o bin/worklog ./cmd/worklog
 
 默认仅监听本机地址。同机其他进程也可以访问 REST，不是安全隔离边界；  
 共享电脑建议设置 Basic 密码，详见[身份认证与安全](docs/AUTHENTICATION.md)。  
-也可不使用环境变量：将 [config.example.json](config.example.json) 复制为 `/etc/worklog/config.json` 并修改其中路径，再执行：
+自定义配置仅使用 JSON 文件：将 [config.example.json](config.example.json) 复制为 `/etc/worklog/config.json` 并修改其中路径，再执行：
 
 ```sh
 ./bin/worklog --conf=/etc/worklog
 ```
 
-`--conf` 支持目录或 JSON 文件；指定后只使用配置文件和内置默认值，忽略 `WORKLOG_*` 环境变量。配置文件权限建议设为 `0600`。
+`--conf` 支持目录或 JSON 文件；省略字段使用内置默认值。不指定时仅使用内置默认值，不自动搜索配置文件。程序不读取业务配置环境变量或 `.env`。配置文件权限建议设为 `0600`。
 
 自定义配置、Nginx 反向代理及 Docker / PostgreSQL 部署见[部署与配置](docs/DEPLOYMENT.md)。
 
@@ -59,12 +59,12 @@ bash scripts/build-windows.sh
 - 使用待办记录临时事项，按日期编辑富文本工作日志；服务端默认业务时区为 `Asia/Shanghai`。
 - 多个标签页或 MCP 同时修改时，旧版本保存会返回冲突。先复制未保存内容，再重新加载最新数据，不要反复覆盖提交。
 - AI 客户端可通过 `/mcp` 接入，使用独立 Bearer 令牌；配置示例见 [MCP 客户端指南](docs/MCP.md)。浏览器不需要配置该令牌。
-- 定期备份数据，SQLite 可执行 `./bin/worklog backup ./backups/worklog.db`；**不要只复制运行中的 `.db` 文件**。  
+- 定期备份数据，SQLite 可执行 `./bin/worklog --conf=/etc/worklog backup ./backups/worklog.db`（使用与服务相同的配置；仅默认配置启动时可省略 `--conf`）；**不要只复制运行中的 `.db` 文件**。
 恢复步骤见[备份与恢复](docs/OPERATIONS.md)。
 
 ## 文档
 
-- [部署与配置](docs/DEPLOYMENT.md)：配置文件、环境变量、Nginx 反向代理、Docker 与 PostgreSQL。
+- [部署与配置](docs/DEPLOYMENT.md)：JSON 配置、Nginx 反向代理、Docker 与 PostgreSQL。
 - [systemd 持久运行](docs/SYSTEMD.md)：专用用户、配置文件、开机自启、日志与服务维护，附 [worklog.service 示例](docs/worklog.service)。
 - [身份认证与安全](docs/AUTHENTICATION.md)：本地／Basic／Bearer／stdio、权限矩阵与安全边界。
 - [REST API](docs/REST_API.md)：端点、细粒度资源、版本与幂等约定，以及前端快照协议。

@@ -94,19 +94,15 @@ func assertNoTokenTemps(t *testing.T, dir string) {
 }
 
 func TestConcurrentFirstLoad(t *testing.T) {
-	t.Setenv("WORKLOG_ADDR", "127.0.0.1:12450")
-	t.Setenv("WORKLOG_BASIC_PASSWORD", "")
-	t.Setenv("WORKLOG_WRITE_TOKEN", "")
-	t.Setenv("WORKLOG_READ_TOKEN", "")
 	path := filepath.Join(t.TempDir(), "tokens", "mcp")
-	t.Setenv("WORKLOG_TOKEN_FILE", path)
+	conf := writeConfig(t, map[string]any{"token_file": path})
 	const n = 32
 	start := make(chan struct{})
 	tokens := make(chan string, n)
 	errs := make(chan error, n)
 	var wg sync.WaitGroup
 	for range n {
-		wg.Go(func() { <-start; c, e := Load(); tokens <- c.WriteToken; errs <- e })
+		wg.Go(func() { <-start; c, e := LoadFile(conf); tokens <- c.WriteToken; errs <- e })
 	}
 	close(start)
 	wg.Wait()

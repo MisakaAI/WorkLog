@@ -16,6 +16,7 @@ jobs:
         options: >-
           --health-cmd pg_isready --health-interval 5s
           --health-timeout 5s --health-retries 12
+    # Test harness inputs only; Worklog itself reads JSON configuration.
     env:
       WORKLOG_TEST_POSTGRES_DSN: postgres://worklog_test:test_only_password@127.0.0.1:55432/worklog_test?sslmode=disable
     steps:
@@ -28,6 +29,10 @@ jobs:
           node-version: '24'
           cache: npm
           cache-dependency-path: Web/package-lock.json
+      - name: Validate JSON-file deployment manifests
+        run: |
+          docker compose config --quiet
+          docker compose -f compose.yaml -f compose.postgres.yaml config --quiet
       - run: go vet ./...
       - run: go test -race ./...
       - run: npm ci

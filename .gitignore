@@ -95,10 +95,17 @@ go.work.sum
 *.db-shm
 *.migrate.lock
 
+# Private container configuration, passwords and bind-mounted runtime data
+/deploy/
+/config.json
+/config.local.json
+/restore.json
+/stdio.json
+/postgres-password.txt
+
 # env file
 .env
 .env.*
-!.env.example
 
 # Editor/IDE
 # .idea/

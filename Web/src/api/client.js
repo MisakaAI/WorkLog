@@ -1,6 +1,9 @@
-// 运行时配置优先；空字符串显式启用本地模式。配置错误不能静默降级。
+// 仅使用运行时配置；未配置或空字符串启用本地模式。配置错误不能静默降级。
 export function getBackendURL() {
-  const value = globalThis.WORKLOG_CONFIG?.apiBaseUrl ?? import.meta.env?.VITE_API_BASE_URL ?? ''
+  return normalizeBackendURL(globalThis.WORKLOG_CONFIG?.apiBaseUrl ?? '')
+}
+
+export function normalizeBackendURL(value) {
   if (typeof value !== 'string') throw new Error('后端 URL 必须为字符串')
   const trimmed = value.trim()
   if (!trimmed) return ''

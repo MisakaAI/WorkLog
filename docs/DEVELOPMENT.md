@@ -9,16 +9,16 @@
 
 ```sh
 cd Web
-VITE_API_BASE_URL=/api npm run dev
+npm run dev
 ```
 
-Vite 将 `/api` 代理到 `127.0.0.1:12450`。不要将开发服务器公开到互联网。
+Vite 将 `/config.json` 和 `/api` 代理到 `127.0.0.1:12450`，直接复用 Go 服务 JSON 配置派生的 API 地址和业务时区。无需环境变量；后端不可用时显示启动或连接错误，不会自动切换本地模式。不要将开发服务器公开到互联网。
 
 ## 代码结构
 
 ```text
 cmd/worklog/                 HTTP / stdio、迁移与 SQLite 备份恢复命令
-internal/config/             环境配置和私有令牌文件
+internal/config/             JSON 配置、内置默认值和私有令牌文件
 internal/domain/             模型、身份、公开错误和输入／富文本校验
 internal/service/            共用业务、事务、版本／幂等
 internal/repository/         Repository 和事务接口
@@ -92,16 +92,15 @@ npm run build
 真实后端适配层测试必须使用一次性数据库，不能使用个人数据：
 
 ```sh
-# 项目根目录；使用新的临时目录避免读取旧测试数据。
-TEST_DIR="$(mktemp -d)"
-WORKLOG_DB_DSN="$TEST_DIR/worklog.db" WORKLOG_TOKEN_FILE="$TEST_DIR/mcp-token" \
-  WORKLOG_ADDR=127.0.0.1:22450 ./bin/worklog
+# 在 Web 目录，自动构建并使用临时 JSON 配置和一次性 SQLite 数据库。
+cd Web
+node tests/start-backend.js
 # 另一终端：
 cd Web
 WORKLOG_TEST_API_URL=http://127.0.0.1:22450/api npm run test:backend
 ```
 
-使用干净的开发环境，避免继承生产 Basic、DSN、Host / Origin 等配置影响测试；结束后停止进程并移除临时目录。
+测试启动器使用独立 JSON，不继承生产业务配置；结束后通过 Ctrl+C 停止后端并清理临时目录。测试工具的 `WORKLOG_TEST_*`、浏览器选择与 CI 变量只用于测试编排，不是应用配置入口。
 
 ## 浏览器 smoke 与 CI
 

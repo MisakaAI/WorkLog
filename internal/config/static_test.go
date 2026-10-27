@@ -8,8 +8,7 @@ import (
 
 func TestStaticRootCannotContainPrivatePaths(t *testing.T) {
 	dir := t.TempDir()
-	t.Setenv("WORKLOG_TOKEN_FILE", filepath.Join(dir, "data", "token"))
-	c := Config{Driver: "sqlite", DSN: filepath.Join(dir, "data", "worklog.db"), StaticDir: dir}
+	c := Config{Driver: "sqlite", DSN: filepath.Join(dir, "data", "worklog.db"), TokenFile: filepath.Join(dir, "data", "token"), StaticDir: dir}
 	if validateStaticDir(c) == nil {
 		t.Fatal("private ancestor accepted")
 	}

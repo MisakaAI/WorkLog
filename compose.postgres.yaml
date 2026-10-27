@@ -1,25 +1,36 @@
 # docker compose -f compose.yaml -f compose.postgres.yaml up --build -d
+# Use config.postgres.example.json as deploy/config.json; write the full DSN
+# there, with the same independent password as deploy/postgres-password.txt.
+# Generate a nonempty URL-safe password (e.g. openssl rand -hex 32).
+# Password file: host owner, mode 0600. PostgreSQL starts as root and reads the
+# Compose secret before dropping privileges; do not force user: 10001 here.
+# Local Compose bind-backed secrets preserve host ownership/mode.
+# Changing this file does NOT rotate passwords in an initialized postgres-data.
 services:
   worklog:
-    environment:
-      WORKLOG_DB_DRIVER: postgres
-      WORKLOG_DB_DSN: postgres://worklog:${WORKLOG_POSTGRES_PASSWORD:?Set a URL-safe PostgreSQL password}@postgres:5432/worklog?sslmode=disable
     depends_on:
       postgres:
         condition: service_healthy
   postgres:
     image: postgres:18-alpine
     restart: unless-stopped
+    # Fixed third-party image initialization parameters, not host overrides.
+    # Worklog application settings live in JSON; the password comes from a file.
     environment:
       POSTGRES_USER: worklog
       POSTGRES_DB: worklog
-      POSTGRES_PASSWORD: ${WORKLOG_POSTGRES_PASSWORD:?Set a URL-safe PostgreSQL password}
+      POSTGRES_PASSWORD_FILE: /run/secrets/postgres_password
+    secrets:
+      - postgres_password
     volumes:
       - postgres-data:/var/lib/postgresql
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U worklog -d worklog"]
+      test: ["CMD", "pg_isready", "-U", "worklog", "-d", "worklog"]
       interval: 5s
       timeout: 3s
       retries: 20
+secrets:
+  postgres_password:
+    file: ./deploy/postgres-password.txt
 volumes:
   postgres-data:

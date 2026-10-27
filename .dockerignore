@@ -1,7 +1,13 @@
 .git
+# Never send host deployment secrets/data to the builder.
+deploy
+config.json
+config.local.json
+restore.json
+stdio.json
+postgres-password.txt
 .env
 .env.*
-!.env.example
 data
 backups
 bin
@@ -13,3 +19,5 @@ Web/dist
 Web/test-results
 Web/playwright-report
 Web/.env*
+# Public browser defaults are not the private server configuration.
+!Web/public/config.json

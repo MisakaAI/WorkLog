@@ -28,18 +28,16 @@ func TestActualStdioCommand(t *testing.T) {
 	}
 	for _, tc := range []struct {
 		name     string
-		env      string
 		file     bool
 		readOnly bool
 	}{
-		{"env_writable", "false", false, false},
-		{"env_read_only", "true", false, true},
-		{"file_read_only_ignores_env", "false", true, true},
-		{"file_writable_ignores_env", "true", true, false},
+		{"defaults_writable_ignores_env", false, false},
+		{"file_read_only_ignores_env", true, true},
+		{"file_writable_ignores_env", true, false},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			dir := t.TempDir()
-			path := filepath.Join(dir, "stdio.db")
+			path := filepath.Join(dir, "data", "worklog.db")
 			args := []string{"stdio"}
 			if tc.file {
 				conf := filepath.Join(dir, "config.json")
@@ -53,7 +51,9 @@ func TestActualStdioCommand(t *testing.T) {
 				args = []string{"--conf", conf, "stdio"}
 			}
 			command := exec.CommandContext(ctx, binary, args...)
-			command.Env = append(os.Environ(), "WORKLOG_ADDR=127.0.0.1:12450", "WORKLOG_DB_DRIVER=sqlite", "WORKLOG_DB_DSN="+path, "WORKLOG_TOKEN_FILE="+filepath.Join(dir, "token"), "WORKLOG_WRITE_TOKEN=", "WORKLOG_READ_TOKEN=", "WORKLOG_STATIC_DIR=", "WORKLOG_MCP_ALLOW_DESTRUCTIVE=true", "WORKLOG_STDIO_READ_ONLY="+tc.env)
+			command.Dir = dir
+			// Conflicting legacy variables are regression inputs, never configuration.
+			command.Env = append(os.Environ(), "WORKLOG_ADDR=invalid", "WORKLOG_DB_DRIVER=invalid", "WORKLOG_DB_DSN=ignored.db", "WORKLOG_TOKEN_FILE=ignored-token", "WORKLOG_WRITE_TOKEN=short", "WORKLOG_READ_TOKEN=short", "WORKLOG_TIMEZONE=invalid", "WORKLOG_USER_ID=ignored", "WORKLOG_MCP_ALLOW_DESTRUCTIVE=false", "WORKLOG_STDIO_READ_ONLY="+map[bool]string{true: "false", false: "true"}[tc.readOnly])
 			client := mcp.NewClient(&mcp.Implementation{Name: "stdio-test", Version: "1"}, nil)
 			session, e := client.Connect(ctx, &mcp.CommandTransport{Command: command}, nil)
 			must(t, e)

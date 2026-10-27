@@ -70,28 +70,42 @@ python3 ico.py
 ### 2. 后端模式
 
 仓库根目录已提供可运行的 Go / SQLite / PostgreSQL 后端和 MCP Server，配置、认证、备份及部署见 [后端 README](../README.md)。  
-构建本前端后在根目录启动 Go 程序，即可通过 `http://127.0.0.1:12450` 使用同源 `/api`；Go 提供的 `config.js` 会自动选择真实后端。  
-开发时运行后端，再使用 `VITE_API_BASE_URL=/api npm run dev`，Vite 会将 `/api` 代理到本机 12450 端口。
+构建本前端后在根目录启动 Go 程序，即可通过 `http://127.0.0.1:12450` 使用同源 `/api`；Go 提供的 `config.json` 会自动选择真实后端。
+开发时先在仓库根目录运行后端，再在 `Web/` 中执行 `npm run dev`，无需环境变量。
+仅 Vite 开发服务器将 `/config.json` 和 `/api` 一并代理到 `http://127.0.0.1:12450`，
+直接使用 Go 从服务端 JSON 配置派生的同源 API 地址和业务时区，不维护另一份开发业务配置。
+开发后端未启动时会显示启动配置错误并停止挂载，不会自动降级本地模式。
+开发代理不写入 `public/` 或 `dist/`，`npm run build` 与 `npm run preview` 仍使用发布的 `config.json`，默认本地模式。
+需要验证纯本地模式时使用构建后的 preview。
 
-将 **API 基础 URL（包含 `/api` 等前缀）** 配置为以下任一种方式：
-
-**独立静态部署时配置，推荐：** 编辑 `dist/config.js`，无需重新构建。  
-注意 Go 内置静态服务会动态生成 `/config.js`，不会读取这个文件；  
+**独立静态部署配置后端：** 编辑 `dist/config.json` 中的 **API 基础 URL（包含 `/api` 等前缀）**，无需重新构建。
+注意 Go 内置静态服务会动态生成 `/config.json`，只输出 `apiBaseUrl` 和 `businessTimezone`，不会读取这个文件；
 Go 部署固定同源 `/api` 并自动传入业务时区，子目录代理约定见 [部署与配置](../docs/DEPLOYMENT.md#子目录部署)。
 
-```js
-window.WORKLOG_CONFIG = { apiBaseUrl: '/api', businessTimezone: 'Asia/Shanghai' }
-// 跨域 URL 仅在部署层已解决认证时可用；CORS 本身不提供登录能力。
+```json
+{
+  "apiBaseUrl": "/api",
+  "businessTimezone": "Asia/Shanghai"
+}
 ```
 
-**构建时配置：** 在项目根目录 `.env.local` 中设置后重新构建：
+跨域 URL 仅在部署层已解决认证时可用；CORS 本身不提供登录能力。
 
-```dotenv
-VITE_API_BASE_URL=https://backend.example.com/api
-```
+用户配置只使用公开的 `config.json`，不读取构建时业务环境变量，也不使用 `.env.local` 或可执行 `config.js` 配置 API。
+`window.WORKLOG_CONFIG` 仅是应用内部载体，不再是部署人员编辑的文件。
+发布的 `config.json` 默认为 `{}`；未设置 `apiBaseUrl` 或显式设置为 `""` 时使用本地模式。
 
-运行时 `apiBaseUrl` 优先于环境变量；发布的 `config.js` 默认为 `{}`，因此不覆盖构建配置。  
-显式设置 `apiBaseUrl: ''` 强制本地模式。修改配置后刷新页面；配置值不能是相对路径、`//host` 或非 HTTP(S) URL。不要在前端配置里放密钥。
+启动入口在加载应用前，先相对于页面 URL 请求 `./config.json`（支持 `/worklog/` 子目录），
+使用同源凭证、禁用缓存，并设置 5 秒超时。只有读取完成并校验通过才加载应用，避免首批业务请求使用错误地址。
+`config.json` 是必需发布文件，不存在读取失败回退：
+
+- 文件缺失（404/410）、网络失败、超时、其他 HTTP 错误（包括 401/403/5xx）、JSON 损坏、非对象、未知字段、非法 URL 或时区：显示启动错误，不加载应用，不发送业务 API 请求，不写本地业务数据。
+- 只有成功读取合法配置后才启动；`{}`、省略 API 地址或显式空 API 地址表示本地模式。
+
+JSON 仅允许 `apiBaseUrl` 和 `businessTimezone` 两个可选字段；不允许注释、尾逗号或密钥。
+修改配置后刷新页面；URL 不能是相对路径、`//host` 或非 HTTP(S) 地址。
+站点自定义 CSP 时需允许 `connect-src 'self'` 读取 JSON 和同源 API；配置跨域 API 时还需允许该 API 来源。
+配置不再需要额外的可执行配置脚本或相应 `script-src` 放行规则（应用模块和首屏主题脚本仍遵循原 CSP 要求）。
 
 配置后所有业务数据由 API 提供，**不读取本地业务缓存，不自动迁移或同步两种模式的数据，也不会在后端故障时偷偷切回本地模式**。  
 移除配置后可重新使用原有本地数据。
@@ -135,11 +149,40 @@ VITE_API_BASE_URL=https://backend.example.com/api
 - 工作台写入期间阻止重复交互并显示保存状态；任务、项目和分类保存失败时弹窗保持打开，待办／拖动失败恢复原数据。
 - 后端并发更新使用工作台 `revision` 和日志 `version` 检查。冲突不会自动覆盖服务端；请先复制未保存草稿，日志可使用明确确认的“重新加载”入口，工作台可刷新页面读取最新数据，必要时重新应用修改。多设备协作和离线同步不在当前范围内。页面跨午夜会刷新今天标签和甘特图，并提示仍在编辑的日期，不会自动把正在编辑的日志切到新一天。
 
-浏览器 smoke 使用真实 Go 服务和一次性数据库：先 `npm run build`，再 `npx playwright install chromium webkit`，执行 `WORKLOG_TEST_WEBKIT=1 npm run test:e2e`。该命令需要 Go；`WORKLOG_CHROMIUM_EXECUTABLE` 可指定已安装的 Chrome。
+### 后端集成与浏览器测试
+
+以下命令均在 `Web/` 下运行，需要 Go。`npm test` 不含真实后端与浏览器测试。
+
+浏览器 smoke 使用真实 Go 服务和一次性 SQLite 数据库：
+
+```sh
+npm run build
+npx playwright install chromium
+npm run test:e2e
+# 可选：npx playwright install webkit
+# WORKLOG_TEST_WEBKIT=1 npm run test:e2e
+```
+
+Playwright 自动调用 `tests/start-backend.js`：在系统临时目录创建数据库、权限为 `0600` 的 JSON 配置和 Go 可执行文件，
+使用 `--conf` 启动，退出时删除临时目录。不设置或读取 WORKLOG 业务环境变量；父进程即使带有业务环境变量，也由 `--conf` 忽略。
+测试工具变量可保留：`WORKLOG_E2E_PORT` 修改默认端口 `22450`，`WORKLOG_CHROMIUM_EXECUTABLE` 指定已安装的 Chrome，
+`WORKLOG_TEST_WEBKIT=1` 增加 WebKit 项目，`CI` 控制失败重试。
+
+适配器集成测试需要单独的全新数据库，**不要指向个人或生产后端**。在两个终端运行（端口须一致）：
+
+```sh
+# 终端 1：会等待运行，结束后按 Ctrl+C 清理临时资源
+node tests/start-backend.js
+# 终端 2：仅测试工具读取此 URL，不是业务配置环境变量
+WORKLOG_TEST_API_URL=http://127.0.0.1:22450/api npm run test:backend
+```
+
+集成测试会修改数据；再次运行前应重启临时后端。不要与 Playwright 共用同一实例或端口。
 
 ## 代码导航与 review
 
-- `src/api/client.js`：配置选择、统一 HTTP、错误及超时处理。
+- `src/bootstrap.js`、`src/runtimeConfig.js`：先读取并校验公开 JSON，再加载应用；配置失败停止挂载。
+- `src/api/client.js`：运行时地址校验、统一 HTTP、错误及超时处理。
 - `src/api/index.js`：工作台的本地／后端适配及静态日历 JSON 加载。
 - `src/api/worklog.js`：日志读写、显式版本参数及日期标记，不依赖静态文件。
 - `src/dashboard.js`、`src/workCalendar.js`：结构校验、筛选、日期及关联变更规则。

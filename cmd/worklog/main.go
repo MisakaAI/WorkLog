@@ -113,7 +113,7 @@ func run(logger *slog.Logger) error {
 // parseArgs 要求全局选项位于子命令之前，例如 worklog --conf=/etc/worklog backup out.db。
 func parseArgs(args []string) (string, []string, error) {
 	flags := flag.NewFlagSet("worklog", flag.ContinueOnError)
-	conf := flags.String("conf", "", "JSON configuration file or directory containing config.json (ignores WORKLOG_* environment variables)")
+	conf := flags.String("conf", "", "JSON configuration file or directory containing config.json (otherwise uses built-in defaults)")
 	flags.Usage = func() {
 		_, _ = io.WriteString(flags.Output(), "Usage: worklog [--conf PATH] [serve | stdio | migrate | backup PATH | restore PATH]\n")
 		flags.PrintDefaults()

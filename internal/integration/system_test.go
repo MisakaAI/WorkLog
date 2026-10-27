@@ -77,7 +77,7 @@ func setup(t *testing.T, driver string) *fixture {
 	must(t, e)
 	svc := service.New(st, loc)
 	svc.Now = func() time.Time { return time.Date(2026, 10, 20, 16, 30, 0, 123456789, time.UTC) }
-	cfg := config.Config{Local: true, User: "owner", AllowedHosts: []string{"127.0.0.1", "localhost"}, AllowedOrigins: []string{"http://localhost:5173"}, WriteToken: strings.Repeat("w", 32), ReadToken: strings.Repeat("r", 32), MCPDestructive: false}
+	cfg := config.Config{Local: true, User: "owner", Timezone: loc.String(), AllowedHosts: []string{"127.0.0.1", "localhost"}, AllowedOrigins: []string{"http://localhost:5173"}, WriteToken: strings.Repeat("w", 32), ReadToken: strings.Repeat("r", 32), MCPDestructive: false}
 	ts := httptest.NewServer(rest.New(svc, cfg, logger))
 	t.Cleanup(ts.Close)
 	return &fixture{st, svc, ts, dsn, driver, cfg}

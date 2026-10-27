@@ -1,0 +1,17 @@
+{
+  "addr": "0.0.0.0:12450",
+  "db_driver": "postgres",
+  "db_dsn": "postgres://worklog:REPLACE_WITH_INDEPENDENT_URL_SAFE_PASSWORD@postgres:5432/worklog?sslmode=disable",
+  "user_id": "owner",
+  "timezone": "Asia/Shanghai",
+  "static_dir": "/app/web",
+  "token_file": "/app/data/mcp-token",
+  "write_token": "",
+  "read_token": "",
+  "basic_user": "worklog",
+  "basic_password": "",
+  "allowed_hosts": ["localhost", "127.0.0.1", "::1"],
+  "allowed_origins": ["http://localhost:12450", "http://127.0.0.1:12450"],
+  "mcp_allow_destructive": false,
+  "stdio_read_only": false
+}
