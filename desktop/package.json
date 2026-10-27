@@ -36,7 +36,8 @@
     ],
     "win": {
       "target": [{ "target": "zip", "arch": ["x64"] }],
-      "signAndEditExecutable": false,
+      "icon": "../Web/public/favicon.ico",
+      "signAndEditExecutable": true,
       "artifactName": "Worklog-${version}-win-x64.${ext}"
     },
     "nsis": {
