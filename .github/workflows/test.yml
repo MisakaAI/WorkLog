@@ -21,6 +21,10 @@ jobs:
       WORKLOG_TEST_POSTGRES_DSN: postgres://worklog_test:test_only_password@127.0.0.1:55432/worklog_test?sslmode=disable
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Test tag-based release version resolution
+        run: bash scripts/test-release-version.sh
       - uses: actions/setup-go@v5
         with:
           go-version-file: go.mod

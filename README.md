@@ -32,6 +32,24 @@ sudo bash ./install.sh  # 安装系统服务
 
 从 [Releases](https://github.com/MisakaAI/WorkLog/releases) 下载并运行 `worklog-v<版本>-windows-x86_64.exe`。这是原生系统托盘桌面版，使用默认浏览器打开界面，数据默认保存在 `%APPDATA%\WorklogDesktop`。详细说明见 [Windows 桌面版](docs/WINDOWS_DESKTOP.md)。
 
+## 发布版本
+
+发行版本以 Git tag 为唯一来源，不再维护仓库根目录的 `VERSION` 文件，也不支持通过 `VERSION` 环境变量覆盖。Linux / Windows 打包脚本共用 `scripts/release-version.sh`，取当前 `HEAD` 可达的最近 `v[0-9]*` 标签（`git describe --tags --abbrev=0`），并验证为 `vX.Y.Z`（可带预发行／构建后缀）。这不是跨分支按创建时间或版本大小取标签；标签后的开发提交沿用该标签版本，正式发布应在对应标签提交上构建。
+
+```sh
+# 先提交代码、脚本与文档，再创建发行标签：
+git tag -a v0.2.0-rc.1 -m "Release v0.2.0-rc.1"
+bash scripts/build-linux.sh
+bash scripts/build-windows.sh
+# 需要发布到远端时，推送提交及标签：
+git push origin HEAD
+git push origin v0.2.0-rc.1
+```
+
+打包需要 Git 仓库及标签；没有标签或标签格式非法会直接失败，不回退到硬编码版本。已有完整克隆可执行 `git fetch --tags`；浅克隆先执行 `git fetch --unshallow --tags`，CI checkout 设置 `fetch-depth: 0`。源码 ZIP 不包含 Git 元数据，不能直接运行发行打包脚本。
+
+版本解析回归测试：`bash scripts/test-release-version.sh`。前端 `Web/package.json` 的版本是内部 npm 包元数据，不作为整体发行版本；发布包内的 `VERSION` 只是由标签生成的安装记录。
+
 ## 简单使用
 
 - 在工作台创建项目、添加任务，在列表／看板／甘特图中管理进度与排期。

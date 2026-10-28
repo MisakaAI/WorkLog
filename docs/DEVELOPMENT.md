@@ -1,7 +1,7 @@
 # 开发与测试
 
 构建与本地启动见 [README](../README.md#部署与启动)。  
-版本以 `go.mod`、`Web/package-lock.json` 和 CI 配置为准，不在本文保存某次机器上的通过数量或阶段性验收结果。
+发行版本以 Git tag 为准，打包与打标签流程见 [发布版本](../README.md#发布版本)；工具链和依赖版本以 `go.mod`、`Web/package-lock.json` 和 CI 配置为准，不在本文保存某次机器上的通过数量或阶段性验收结果。
 
 ## 前端热更新
 

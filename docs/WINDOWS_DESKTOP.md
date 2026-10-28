@@ -4,7 +4,7 @@ Worklog 桌面版以一个 `worklog-v<版本号>-windows-x86_64.exe` 运行原�
 
 ## 从 Linux 构建 Windows x64
 
-需要仓库 `go.mod` 指定的 Go 版本、Node.js 24.15+、npm 和下载依赖的网络连接。无需 Windows SDK、MinGW、CGO、Wine 或 Windows 环境：
+需要 Git（含发行标签的仓库检出）、仓库 `go.mod` 指定的 Go 版本、Node.js 24.15+、npm 和下载依赖的网络连接。无需 Windows SDK、MinGW、CGO、Wine 或 Windows 环境：
 
 ```sh
 # 若 Go 不在 PATH，请先添加相应目录，例如：
@@ -12,16 +12,15 @@ export PATH=/opt/go/bin:$PATH
 bash scripts/build-windows.sh
 ```
 
-产物命名为 **`bin/worklog-v<版本号>-windows-x86_64.exe`**，默认读取仓库根目录的 `VERSION`（当前为 `0.1.0`），因此默认产物为 `bin/worklog-v0.1.0-windows-x86_64.exe`。可用环境变量覆盖（允许带 `v` 前缀，文件名只保留一个 `v`）：
+产物命名为 **`bin/worklog-v<版本号>-windows-x86_64.exe`**。版本统一由 `scripts/release-version.sh` 获取当前 `HEAD` 可达的最近发行标签（`git describe --tags --abbrev=0 --match 'v[0-9]*' HEAD`），不读取根目录版本文件，也不接受 `VERSION` 环境变量覆盖。例如在 `v0.2.0-rc.1` 标签上构建：
 
 ```sh
-VERSION=0.2.0 bash scripts/build-windows.sh
-# bin/worklog-v0.2.0-windows-x86_64.exe
-VERSION=v0.2.0-rc.1 bash scripts/build-windows.sh
+git switch --detach v0.2.0-rc.1
+bash scripts/build-windows.sh
 # bin/worklog-v0.2.0-rc.1-windows-x86_64.exe
 ```
 
-版本号使用 `X.Y.Z` 格式，可带预发行／构建后缀；不允许路径分隔符。`VERSION` 表示整体桌面发行版本，与前端 npm 包的内部版本独立。不同版本产物可并存，脚本不生成旧的 `Worklog.exe` 别名，也不删除已有构建文件。
+发行标签使用 `vX.Y.Z` 格式，可带预发行／构建后缀；不允许路径分隔符。标签缺失或格式非法会在构建前报错；浅克隆／CI 需获取完整历史和标签。完整发行流程见 [发布版本](../README.md#发布版本)。整体发行版本与前端 npm 包的内部版本独立。不同版本产物可并存，脚本不生成旧的 `Worklog.exe` 别名，也不删除已有构建文件。
 
 脚本会执行 `npm ci`、Vite 生产构建、固定版本的纯 Go Windows 资源编译器，以及 `GOOS=windows GOARCH=amd64 CGO_ENABLED=0` 构建。`-H=windowsgui` 隐藏 Release 控制台。图标复用 `Web/public/favicon.ico`，资源和 manifest 编入 PE；前端、Monaco workers、时区和数据库迁移都在 exe 内。目标机器无需安装 Go、Node.js 或额外 GUI 运行时。构建时生成的 `.syso` 不是发行文件。
 
@@ -78,7 +77,7 @@ Worklog                  （不可点击标题）
 
 配置使用现有 JSON 字段、业务身份、时区、Basic 密码、MCP 令牌与数据格式，**不会迁移、覆盖或清空旧数据库**：
 
-1. `worklog-v0.1.0-windows-x86_64.exe --conf C:\path\config.json`（也支持目录）优先。
+1. `worklog-v0.2.0-rc.1-windows-x86_64.exe --conf C:\path\config.json`（也支持目录）优先。
 2. 无 `--conf` 时，若存在 `%APPDATA%\WorklogDesktop\config.json`，使用该文件。
 3. 否则使用桌面版内置默认值，不读取业务配置环境变量。
 

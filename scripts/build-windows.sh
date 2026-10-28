@@ -3,18 +3,12 @@ set -euo pipefail
 
 # Build-time prerequisites: Go (see go.mod), Node.js/npm, and network access
 # for uncached Go modules and npm packages. No Windows SDK or CGO is needed.
-# Override the Go executable with e.g. GO=/opt/go/bin/go, or the release
-# version with VERSION=0.2.0 (otherwise read the repository's VERSION file).
+# Override the Go executable with e.g. GO=/opt/go/bin/go.
+# The release version is resolved exclusively from Git tags.
 ROOT="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$ROOT"
 GO="${GO:-go}"
-VERSION="${VERSION:-$(<"$ROOT/VERSION")}"
-VERSION="${VERSION#v}"
-# Keep filenames predictable and prevent path separators or shell metacharacters.
-if [[ ! "$VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z]+([.-][0-9A-Za-z]+)*)?(\+[0-9A-Za-z]+([.-][0-9A-Za-z]+)*)?$ ]]; then
-    printf 'Invalid VERSION: expected X.Y.Z with optional prerelease/build suffix.\n' >&2
-    exit 1
-fi
+VERSION="$(bash "$ROOT/scripts/release-version.sh")"
 OUTPUT="$ROOT/bin/worklog-v${VERSION}-windows-x86_64.exe"
 WINRES_TOOL='github.com/tc-hib/go-winres@v0.3.3'
 RESOURCE_PREFIX="$ROOT/cmd/worklog-desktop/rsrc"

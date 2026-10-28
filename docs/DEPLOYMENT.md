@@ -318,8 +318,8 @@ Worklog 在 Linux 下以一个 Go 进程提供前端静态文件、REST API 和 
 例如下载后解压（将版本号替换为实际版本）：
 
 ```sh
-tar --zstd -xf worklog-v0.1.0-linux-x86_64.tar.zst
-cd worklog-v0.1.0-linux-x86_64
+tar --zstd -xf worklog-v0.2.0-rc.1-linux-x86_64.tar.zst
+cd worklog-v0.2.0-rc.1-linux-x86_64
 ```
 
 压缩包包含 `bin/worklog`、`Web/dist/`、`install.sh`、`uninstall.sh`、配置示例、systemd 模板、版本与架构信息及运维文档。
@@ -399,14 +399,12 @@ bash ./uninstall.sh purge       # 无需确认：删除当前用户的程序、�
 
 ## 2. 自行编译再部署
 
-只在构建机器上安装 [README](../README.md#开发环境) 要求的 Go、Node.js / npm，以及 tar、zstd。编译不需要 root：
+只在构建机器上安装 Git、[README](../README.md#开发环境) 要求的 Go、Node.js / npm，以及 tar、zstd。使用含发行标签的仓库检出进行打包。编译不需要 root：
 
 ```sh
 bash scripts/build-linux.sh
 # Go 不在 PATH 时：
 # GO=/opt/go/bin/go bash scripts/build-linux.sh
-# 覆盖发布版本：
-# VERSION=0.2.0 bash scripts/build-linux.sh
 ```
 
 脚本只构建一次前端，然后以 `CGO_ENABLED=0` 交叉编译 Linux amd64 和 arm64，输出：
@@ -416,7 +414,9 @@ bin/worklog-v<版本>-linux-x86_64.tar.zst
 bin/worklog-v<版本>-linux-arm64.tar.zst
 ```
 
-默认版本读取仓库 `VERSION`。不需要 Windows SDK、目标架构编译器或目标机器上的构建工具。将对应压缩包复制到目标主机，按第 1 节解压安装；**不要直接在源码仓库运行 `scripts/install-linux.sh`**，安装脚本依赖发布包布局。
+版本统一由 `scripts/release-version.sh` 从当前 `HEAD` 可达的最近发行标签获取（`git describe --tags --abbrev=0 --match 'v[0-9]*' HEAD`）。标签使用 `vX.Y.Z` 格式，支持预发行／构建后缀，例如 `v0.2.0-rc.1`；不读取根目录版本文件，也不接受 `VERSION` 环境变量覆盖。没有匹配标签或标签格式非法时直接报错。浅克隆／CI 需获取完整历史和标签；发布流程见 [发布版本](../README.md#发布版本)。发布包及安装目录中的 `VERSION` 仅为脚本自动生成的版本记录，不参与版本选择。
+
+不需要 Windows SDK、目标架构编译器或目标机器上的构建工具。将对应压缩包复制到目标主机，按第 1 节解压安装；**不要直接在源码仓库运行 `scripts/install-linux.sh`**，安装脚本依赖发布包布局。
 
 开发环境中从源码构建并手动启动，可在项目根目录执行：
 

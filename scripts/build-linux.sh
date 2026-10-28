@@ -5,12 +5,7 @@ set -euo pipefail
 ROOT="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$ROOT"
 GO="${GO:-go}"
-VERSION="${VERSION:-$(<"$ROOT/VERSION")}"
-VERSION="${VERSION#v}"
-if [[ ! "$VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z]+([.-][0-9A-Za-z]+)*)?(\+[0-9A-Za-z]+([.-][0-9A-Za-z]+)*)?$ ]]; then
-    printf 'Invalid VERSION: expected X.Y.Z with optional prerelease/build suffix.\n' >&2
-    exit 1
-fi
+VERSION="$(bash "$ROOT/scripts/release-version.sh")"
 for tool in "$GO" npm tar zstd; do
     command -v "$tool" >/dev/null 2>&1 || { printf 'Required command not found: %s\n' "$tool" >&2; exit 1; }
 done
@@ -35,6 +30,7 @@ for arch in amd64 arm64; do
     cp "$ROOT/config.example.json" "$ROOT/config.docker.example.json" \
         "$ROOT/config.postgres.example.json" "$ROOT/README.md" "$package/"
     cp "$ROOT/Web/README.md" "$package/Web/README.md"
+    # Generated release metadata, never an input to version selection.
     printf '%s\n' "$VERSION" > "$package/VERSION"
     printf '%s\n' "$arch" > "$package/ARCH"
     cp "$ROOT"/docs/*.md "$ROOT/docs/worklog.service" "$package/docs/"
