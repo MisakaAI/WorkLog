@@ -1,7 +1,7 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import { readFileSync, readdirSync } from 'node:fs'
-import { getDashboard, saveDashboard, emptyDashboard, DASHBOARD_KEY } from '../src/api/index.js'
+import { getDashboard, manageCategories, saveDashboard, emptyDashboard, DASHBOARD_KEY } from '../src/api/index.js'
 import { getBackendURL, requestJSON } from '../src/api/client.js'
 import { replaceProjects } from '../src/dashboard.js'
 
@@ -56,6 +56,85 @@ test('本地归档默认隐藏，普通保存不丢失归档任务，可恢复�
   await saveDashboard(deleted)
   assert.equal((await getDashboard()).projects.length, 0)
   assert.deepEqual((await getDashboard()).tasks, [])
+})
+
+test('本地分类重命名、交换和删除覆盖归档任务，旧快照不能覆盖新数据', async t => {
+  setup(t)
+  const task = { title: '任务', description: '', status: 'planned', priority: '中', startDate: '', date: '', color: 'white' }
+  let snapshot = await saveDashboard({ ...emptyDashboard(), revision: 0, categories: ['开发', '设计'], projects: [{ id: 'a', name: '归档', archived: true }], tasks: [
+    { ...task, id: 'visible', projectId: '', tag: '开发' },
+    { ...task, id: 'hidden', projectId: 'a', tag: '设计' },
+  ] })
+  const stale = snapshot
+  snapshot = await manageCategories(snapshot, [{ originalName: '开发', name: '开发' }, { originalName: '设计', name: ' 视觉设计 ' }])
+  assert.equal(snapshot.tasks.length, 1)
+  assert.deepEqual((await getDashboard({ includeArchived: true })).tasks.map(task => task.tag), ['开发', '视觉设计'])
+  snapshot = await manageCategories(snapshot, [{ originalName: '开发', name: '视觉设计' }, { originalName: '视觉设计', name: '开发' }])
+  assert.deepEqual((await getDashboard({ includeArchived: true })).tasks.map(task => task.tag), ['视觉设计', '开发'])
+  snapshot = await manageCategories(snapshot, [{ originalName: '视觉设计', name: '保留' }])
+  assert.deepEqual((await getDashboard({ includeArchived: true })).tasks.map(task => task.tag), ['保留', '保留'])
+  await assert.rejects(manageCategories(stale, [{ originalName: '开发', name: '旧修改' }]), /其他页面/)
+  assert.deepEqual(await getDashboard(), snapshot)
+})
+
+test('本地普通保存保留归档位置，可见项目排序、增删和恢复后顺序一致', async t => {
+  setup(t)
+  const archived = id => ({ id, name: id, archived: true })
+  const active = id => ({ id, name: id })
+  let snapshot = await saveDashboard({ ...emptyDashboard(), revision: 0, includeArchived: true, projects: [archived('a'), active('b'), archived('c'), active('d'), archived('e')] })
+  snapshot = await saveDashboard({ ...await getDashboard(), personalLabel: '新标题' })
+  const ids = async () => (await getDashboard({ includeArchived: true })).projects.map(project => project.id)
+  assert.deepEqual(await ids(), ['a', 'b', 'c', 'd', 'e'])
+  snapshot = await saveDashboard({ ...snapshot, projects: [active('d'), active('b'), active('f')] })
+  assert.deepEqual(await ids(), ['a', 'd', 'c', 'b', 'e', 'f'])
+  await saveDashboard({ ...snapshot, projects: [active('b'), active('f')] })
+  assert.deepEqual(await ids(), ['a', 'b', 'c', 'f', 'e'])
+  const full = await getDashboard({ includeArchived: true })
+  full.projects.forEach(project => { project.archived = false })
+  const restored = await saveDashboard(full)
+  assert.deepEqual(restored.projects.map(project => project.id), ['a', 'b', 'c', 'f', 'e'])
+})
+
+test('远端分类管理提交集合版本和旧名映射，成功后读取最新快照，不回写旧快照', async t => {
+  setup(t)
+  globalThis.WORKLOG_CONFIG = { apiBaseUrl: '/api' }
+  const initial = { ...emptyDashboard(), revision: 3 }
+  const latest = { ...initial, revision: 5, categories: ['设计', '开发'], todos: [{ id: 'new', title: '并发新增', done: false }] }
+  const calls = []
+  t.mock.method(globalThis, 'fetch', async (url, options) => {
+    calls.push([url, options.method, options.body && JSON.parse(options.body)])
+    if (url === '/api/categories') return { ok: true, json: async () => ({ revision: 3, categoryRevision: 2 }) }
+    assert.equal(url, '/api/dashboard')
+    return { ok: true, json: async () => latest }
+  })
+  const categories = [{ originalName: '开发', name: '设计' }, { originalName: '设计', name: '开发' }]
+  assert.deepEqual(await manageCategories(initial, categories), latest)
+  assert.deepEqual(calls, [
+    ['/api/categories', 'GET', undefined],
+    ['/api/categories', 'PUT', { categoryRevision: 2, categories }],
+    ['/api/dashboard', 'GET', undefined],
+  ])
+})
+
+test('远端分类管理拒绝过期快照和并发集合冲突，不降级或重试写入', async t => {
+  setup(t)
+  globalThis.WORKLOG_CONFIG = { apiBaseUrl: '/api' }
+  const snapshot = { ...emptyDashboard(), revision: 3 }
+  const categories = [{ originalName: '开发', name: '研发' }]
+  const calls = []
+  t.mock.method(globalThis, 'fetch', async (url, options) => {
+    calls.push(options.method)
+    return { ok: true, json: async () => ({ revision: 4, categoryRevision: 2 }) }
+  })
+  await assert.rejects(manageCategories(snapshot, categories), /已被修改/)
+  assert.deepEqual(calls, ['GET'])
+  globalThis.fetch = async (url, options) => {
+    calls.push(options.method)
+    if (options.method === 'GET') return { ok: true, json: async () => ({ revision: 3, categoryRevision: 2 }) }
+    return { ok: false, status: 409, json: async () => ({ error: { code: 'VERSION_CONFLICT', message: '集合已变化' } }) }
+  }
+  await assert.rejects(manageCategories(snapshot, categories), error => error.status === 409)
+  assert.deepEqual(calls, ['GET', 'GET', 'PUT'])
 })
 
 test('远端模式不读取/写入本地数据，快照 GET/PUT 路径与版本一致', async t => {

@@ -27,16 +27,27 @@ func PreserveArchived(old Dashboard, next *Dashboard) {
 	for _, p := range old.Projects {
 		if p.Archived {
 			hidden[p.ID] = true
-			// 默认视图不能修改归档项目；完整管理快照才可取消归档或删除。
-			for i := 0; i < len(next.Projects); i++ {
-				if next.Projects[i].ID == p.ID {
-					next.Projects = append(next.Projects[:i], next.Projects[i+1:]...)
-					i--
-				}
-			}
-			next.Projects = append(next.Projects, p)
 		}
 	}
+	visible := []Project{}
+	for _, p := range next.Projects {
+		if !hidden[p.ID] {
+			visible = append(visible, p)
+		}
+	}
+	// 默认视图不能修改归档项目；保留它们在旧完整顺序中的位置，
+	// 按提交顺序填入可见项目，新增项目追加到末尾。
+	projects := []Project{}
+	i := 0
+	for _, p := range old.Projects {
+		if p.Archived {
+			projects = append(projects, p)
+		} else if i < len(visible) {
+			projects = append(projects, visible[i])
+			i++
+		}
+	}
+	next.Projects = append(projects, visible[i:]...)
 	for _, t := range old.Tasks {
 		if hidden[t.ProjectID] {
 			// 分类可能已在默认视图中删除。

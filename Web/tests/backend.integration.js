@@ -4,7 +4,7 @@ import assert from 'node:assert/strict'
 import { randomUUID } from 'node:crypto'
 import { JSDOM } from 'jsdom'
 import { parseWorklogHTML } from '../src/worklogEditor.js'
-import { getDashboard, saveDashboard } from '../src/api/index.js'
+import { getDashboard, manageCategories, saveDashboard } from '../src/api/index.js'
 import { replaceProjects } from '../src/dashboard.js'
 import { getTodayWorklog, getWorklog, saveWorklog, getWorklogDates } from '../src/api/worklog.js'
 import { requestJSON } from '../src/api/client.js'
@@ -76,4 +76,29 @@ test('Go 接受的 Unicode 名称可经浏览器适配器保存和重新加载',
   const saved = await saveDashboard({ ...current, projects, categories: [...current.categories, 'ΟΣ', 'ος'] })
   assert.deepEqual(await getDashboard(), saved)
   await assert.rejects(requestJSON('/dashboard', { method: 'PUT', body: { ...saved, projects: [{ id: 'p1', name: 'İ' }, { id: 'p2', name: 'i' }] } }), error => error.status === 400)
+})
+
+test('真实分类适配器迁移归档任务，普通保存保留归档项目顺序和集合版本', async () => {
+  const current = await getDashboard({ includeArchived: true })
+  const project = { id: randomUUID(), name: '归档分类回归', archived: true }
+  const task = { id: randomUUID(), title: '归档任务', description: '', projectId: project.id, status: 'planned', tag: current.categories[1], priority: '中', startDate: '', date: '', color: 'white' }
+  await saveDashboard({ ...current, projects: [project, ...current.projects], tasks: [...current.tasks, task] })
+  const before = await requestJSON('/projects')
+  let snapshot = await saveDashboard({ ...await getDashboard(), personalLabel: '排序回归' })
+  assert.equal((await requestJSON('/projects')).projectRevision, before.projectRevision)
+  const rename = snapshot.categories.map(name => ({ originalName: name, name: name === task.tag ? '视觉设计' : name }))
+  snapshot = await manageCategories(snapshot, rename)
+  let full = await getDashboard({ includeArchived: true })
+  assert.equal(full.projects[0].id, project.id)
+  assert.equal(full.tasks.find(item => item.id === task.id).tag, '视觉设计')
+  assert.ok(!snapshot.tasks.some(item => item.id === task.id))
+  const first = snapshot.categories[0]
+  snapshot = await manageCategories(snapshot, snapshot.categories.map(name => ({ originalName: name, name: name === first ? '视觉设计' : name === '视觉设计' ? first : name })))
+  full = await getDashboard({ includeArchived: true })
+  assert.equal(full.tasks.find(item => item.id === task.id).tag, first)
+  assert.equal(full.projects[0].id, project.id)
+  full.projects[0].archived = false
+  const restored = await saveDashboard(full)
+  assert.equal(restored.projects[0].id, project.id)
+  assert.equal(restored.tasks.find(item => item.id === task.id).tag, first)
 })

@@ -75,9 +75,35 @@ func increment(v *int64) error {
 
 // finalize 在保存前校验完整状态，并统一推进工作台、集合及资源的版本。
 // 集合操作可强制消耗版本；普通快照保存只更新实际发生变化的资源版本。
-func finalize(old, st *domain.State, forceProjects, forceCategories bool) error {
+func finalize(u repository.Unit, old, st *domain.State, forceProjects, forceCategories bool) error {
 	if err := domain.Validate(&st.Dashboard); err != nil {
 		return err
+	}
+	// 只有新进入快照的 ID 才需要查历史墓碑；复用 ID 时继续递增旧版本。
+	newTasks, newTodos := []string{}, []string{}
+	for _, t := range st.Tasks {
+		if _, ok := old.TaskVersions[t.ID.Key()]; !ok {
+			newTasks = append(newTasks, t.ID.Key())
+		}
+	}
+	for _, t := range st.Todos {
+		if _, ok := old.TodoVersions[t.ID.Key()]; !ok {
+			newTodos = append(newTodos, t.ID.Key())
+		}
+	}
+	for _, resource := range []struct {
+		kind          string
+		ids           []string
+		old, versions map[string]int64
+	}{{"task", newTasks, old.TaskVersions, st.TaskVersions}, {"todo", newTodos, old.TodoVersions, st.TodoVersions}} {
+		versions, err := u.ResourceVersions(resource.kind, resource.ids)
+		if err != nil {
+			return err
+		}
+		for id, version := range versions {
+			resource.old[id] = version
+			resource.versions[id] = version
+		}
 	}
 	if err := increment(&st.Revision); err != nil {
 		return err
@@ -151,7 +177,7 @@ func (s *Service) SaveDashboard(ctx context.Context, id domain.Identity, d domai
 		st := copyState(old)
 		st.Dashboard = d
 		st.IncludeArchived = false
-		if e = finalize(old, st, false, false); e != nil {
+		if e = finalize(u, old, st, false, false); e != nil {
 			return e
 		}
 		if e = u.Save(st); e == nil {
@@ -499,7 +525,7 @@ func (s *Service) Execute(ctx context.Context, id domain.Identity, op string, ra
 			return e
 		}
 		forceProjects := op == "replace_projects" || strings.HasSuffix(op, "_project") || op == "reorder_projects"
-		if e = finalize(old, st, forceProjects, op == "manage_categories"); e != nil {
+		if e = finalize(u, old, st, forceProjects, op == "manage_categories"); e != nil {
 			return e
 		}
 		if e = u.Save(st); e != nil {

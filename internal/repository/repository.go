@@ -12,9 +12,12 @@ type Repository interface {
 	Within(context.Context, string, bool, func(Unit) error) error
 	Ping(context.Context) error
 }
+
 // Unit 仅在 Within 回调内有效；所有读写及幂等记录共用同一事务和用户范围。
 type Unit interface {
 	Load() (*domain.State, error)
+	// ResourceVersions 按涉及的 ID 查询历史版本，包括已删除资源；kind 为 task 或 todo。
+	ResourceVersions(kind string, ids []string) (map[string]int64, error)
 	Save(*domain.State) error
 	Worklog(string) (domain.Worklog, error)
 	SaveWorklog(domain.Worklog, bool) error

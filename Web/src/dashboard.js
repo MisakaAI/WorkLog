@@ -123,7 +123,7 @@ export function projectLanes(tasks, projects, projectId = ALL_PROJECTS) {
     .filter(project => project.tasks.length > 0)
 }
 
-// 拖动时兼容数字和字符串 ID；仅在指定状态流转且日期为空时补入浏览器当天日期。
+// 拖动时兼容数字和字符串 ID；仅在指定状态流转、日期为空且区间合法时补入浏览器当天日期。
 // 这是界面交互规则，后端细粒度 move_task 不会自动补日期。
 // placement 指定卡片前/后的插入位置；targetId 为 null 表示目标列末尾。
 // 顺序直接存入 tasks 数组，沿用快照与数据库 position，无需新增排序字段。
@@ -149,8 +149,9 @@ export function moveTaskToLane(data, id, status, projectId, placement) {
   const previousOrder = laneTasks(data.tasks)
   const orderChanged = laneTasks(reordered).some((item, index) => item !== previousOrder[index])
   if (!laneChanged && !orderChanged) return false
-  if (task.status === 'planned' && status === 'progress' && !task.startDate) task.startDate = todayISO()
-  if (task.status === 'progress' && status === 'done' && !task.date) task.date = todayISO()
+  const today = todayISO()
+  if (task.status === 'planned' && status === 'progress' && !task.startDate && !validateDates(today, task.date)) task.startDate = today
+  if (task.status === 'progress' && status === 'done' && !task.date && !validateDates(task.startDate, today)) task.date = today
   task.status = status
   task.projectId = projectId
   if (orderChanged) data.tasks = reordered

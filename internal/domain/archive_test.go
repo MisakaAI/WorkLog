@@ -1,6 +1,9 @@
 package domain
 
-import "testing"
+import (
+	"reflect"
+	"testing"
+)
 
 func TestVisibleAndPreserveArchived(t *testing.T) {
 	old := Empty().Dashboard
@@ -24,5 +27,32 @@ func TestVisibleAndPreserveArchived(t *testing.T) {
 	}
 	if old.Tasks[1].Tag != "开发" {
 		t.Fatal("merge changed original")
+	}
+}
+
+func TestPreserveArchivedProjectOrder(t *testing.T) {
+	archived := func(id string) Project { return Project{ID: id, Name: id, Archived: true} }
+	active := func(id string) Project { return Project{ID: id, Name: id} }
+	old := Empty().Dashboard
+	old.Projects = []Project{archived("a"), active("b"), archived("c"), active("d"), archived("e")}
+	for _, tt := range []struct {
+		name string
+		next []Project
+		want []Project
+	}{
+		{"unchanged", []Project{active("b"), active("d")}, old.Projects},
+		{"reorder and add", []Project{active("d"), active("b"), active("f")}, []Project{archived("a"), active("d"), archived("c"), active("b"), archived("e"), active("f")}},
+		{"delete visible", []Project{active("d")}, []Project{archived("a"), active("d"), archived("c"), archived("e")}},
+		{"delete all visible", []Project{}, []Project{archived("a"), archived("c"), archived("e")}},
+		{"cannot edit archived", []Project{active("e"), active("b"), active("a"), active("d")}, old.Projects},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			next := Empty().Dashboard
+			next.Projects = tt.next
+			PreserveArchived(old, &next)
+			if !reflect.DeepEqual(next.Projects, tt.want) {
+				t.Fatalf("got %v, want %v", next.Projects, tt.want)
+			}
+		})
 	}
 }

@@ -1,4 +1,4 @@
-import { parseDashboard, tags } from '../dashboard.js'
+import { parseDashboard, replaceCategories, tags } from '../dashboard.js'
 import { parseWorkCalendar } from '../workCalendar.js'
 import { getBackendURL, requestJSON } from './client.js'
 
@@ -40,13 +40,31 @@ export async function saveDashboard(snapshot) {
     const old = validateSnapshot(JSON.parse(cached))
     const archived = old.projects.filter(project => project.archived)
     const hidden = new Set(archived.map(project => project.id))
-    merged = { ...snapshot, projects: [...snapshot.projects.filter(project => !hidden.has(project.id)), ...archived], tasks: [...snapshot.tasks, ...old.tasks.filter(task => hidden.has(task.projectId)).map(task => ({ ...task, tag: snapshot.categories.includes(task.tag) ? task.tag : snapshot.categories[0] }))] }
+    const visible = snapshot.projects.filter(project => !hidden.has(project.id))
+    let index = 0
+    // 按旧完整顺序保留归档位置，可见项目按提交顺序填入其余位置；新增项目追加。
+    const projects = old.projects.flatMap(project => project.archived ? [project] : index < visible.length ? [visible[index++]] : [])
+    merged = { ...snapshot, projects: [...projects, ...visible.slice(index)], tasks: [...snapshot.tasks, ...old.tasks.filter(task => hidden.has(task.projectId)).map(task => ({ ...task, tag: snapshot.categories.includes(task.tag) ? task.tag : snapshot.categories[0] }))] }
   }
   const saved = { ...merged, revision: revision + 1 }
   delete saved.includeArchived
   validateSnapshot(saved)
   localStorage.setItem(DASHBOARD_KEY, JSON.stringify(saved))
   return snapshot.includeArchived ? { ...saved, includeArchived: true } : visibleDashboard(saved)
+}
+
+export async function manageCategories(snapshot, drafts) {
+  const categories = drafts.map(({ originalName, name }) => ({ originalName, name: name.trim() }))
+  if (getBackendURL()) {
+    const current = await requestJSON('/categories')
+    if (current.revision !== snapshot.revision) throw new Error('数据已被修改，请刷新页面后重试')
+    await requestJSON('/categories', { method: 'PUT', body: { categoryRevision: current.categoryRevision, categories } })
+    // 集合响应只包含可见任务的变更；重新读取完整默认快照，避免遗漏并发新增的数据。
+    return getDashboard()
+  }
+  const current = await getDashboard({ includeArchived: true })
+  if (current.revision !== snapshot.revision) throw new Error('工作台已被其他页面修改，请重新加载后再保存')
+  return visibleDashboard(await saveDashboard(replaceCategories(current, categories)))
 }
 
 export async function getWorkCalendar() {

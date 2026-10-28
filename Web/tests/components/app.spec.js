@@ -4,10 +4,10 @@ import App from '../../src/App.vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import GanttChart from '../../src/components/GanttChart.vue'
 import WorklogEditor from '../../src/components/WorklogEditor.vue'
-import { emptyCalendar, emptyDashboard, getDashboard, getWorkCalendar, saveDashboard } from '../../src/api/index.js'
+import { emptyCalendar, emptyDashboard, getDashboard, getWorkCalendar, manageCategories, saveDashboard } from '../../src/api/index.js'
 
 vi.mock('../../src/api/index.js', async importOriginal => ({
-  ...await importOriginal(), getDashboard: vi.fn(), getWorkCalendar: vi.fn(), saveDashboard: vi.fn(),
+  ...await importOriginal(), getDashboard: vi.fn(), getWorkCalendar: vi.fn(), manageCategories: vi.fn(), saveDashboard: vi.fn(),
 }))
 vi.mock('../../src/api/worklog.js', async importOriginal => ({ ...await importOriginal(), getWorklogDates: vi.fn(async () => []) }))
 vi.mock('element-plus', async importOriginal => ({ ...await importOriginal(), ElMessage: { error: vi.fn(), warning: vi.fn() }, ElMessageBox: { prompt: vi.fn(), confirm: vi.fn() } }))
@@ -269,6 +269,46 @@ it('待办保存失败回滚工作台，保留输入以便重试', async () => {
   await wrapper.find('form.add-todo').trigger('submit'); await flushPromises()
   expect(wrapper.findAll('.todo-item')).toHaveLength(1)
   expect(input.element.value).toBe('')
+})
+
+it('分类管理提交原名映射，阻止重复保存，后续普通保存沿用已确认的数据和版本', async () => {
+  const snapshot = { ...emptyDashboard(), revision: 3, categories: ['开发', '设计'] }
+  const saved = { ...snapshot, revision: 4, categories: ['开发', '视觉设计'] }
+  getDashboard.mockResolvedValue(snapshot)
+  let finish
+  manageCategories.mockImplementationOnce(() => new Promise(resolve => { finish = () => resolve(saved) }))
+  open(); await flushPromises()
+  await wrapper.findAll('button').find(button => button.text() === '分类管理').trigger('click')
+  await wrapper.find('input[aria-label="分类名称：设计"]').setValue('视觉设计')
+  const form = wrapper.findAll('form').find(form => form.find('input[aria-label="新分类名称"]').exists())
+  await form.trigger('submit')
+  await form.trigger('submit')
+  expect(manageCategories).toHaveBeenCalledTimes(1)
+  expect(manageCategories).toHaveBeenCalledWith(snapshot, [
+    expect.objectContaining({ originalName: '开发', name: '开发' }),
+    expect.objectContaining({ originalName: '设计', name: '视觉设计' }),
+  ])
+  expect(saveDashboard).not.toHaveBeenCalled()
+  finish(); await flushPromises()
+  await wrapper.find('input[aria-label="新待办"]').setValue('后续待办')
+  await wrapper.find('form.add-todo').trigger('submit'); await flushPromises()
+  expect(saveDashboard).toHaveBeenCalledWith(expect.objectContaining({ revision: 4, categories: ['开发', '视觉设计'] }))
+})
+
+it('分类保存失败保留草稿与已确认工作台，重试仍使用原快照版本', async () => {
+  const snapshot = { ...emptyDashboard(), revision: 3, categories: ['开发', '设计'] }
+  getDashboard.mockResolvedValue(snapshot)
+  manageCategories.mockRejectedValueOnce(new Error('版本冲突')).mockResolvedValueOnce({ ...snapshot, revision: 4, categories: ['开发', '视觉设计'] })
+  open(); await flushPromises()
+  await wrapper.findAll('button').find(button => button.text() === '分类管理').trigger('click')
+  await wrapper.find('input[aria-label="分类名称：设计"]').setValue('视觉设计')
+  const form = wrapper.findAll('form').find(form => form.find('input[aria-label="新分类名称"]').exists())
+  await form.trigger('submit'); await flushPromises()
+  expect(ElMessage.error).toHaveBeenCalledWith('保存失败：版本冲突')
+  expect(wrapper.find('input[aria-label="分类名称：视觉设计"]').element.value).toBe('视觉设计')
+  await form.trigger('submit'); await flushPromises()
+  expect(manageCategories).toHaveBeenNthCalledWith(2, snapshot, expect.any(Array))
+  expect(saveDashboard).not.toHaveBeenCalled()
 })
 
 it('日历只加载一次，日期面板与甘特图共享失败状态和重试结果', async () => {

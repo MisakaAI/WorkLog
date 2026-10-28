@@ -1,7 +1,7 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
-import { ALL_PROJECTS, reorderProjects, parseDashboard, replaceProjects, validateProjects, filterTasks, projectLanes, moveTaskToLane, todayISO } from '../src/dashboard.js'
+import { ALL_PROJECTS, reorderProjects, parseDashboard, replaceProjects, validateProjects, filterTasks, projectLanes, moveTaskToLane, todayISO, dateToDay, dayToDate } from '../src/dashboard.js'
 
 const taskDefaults = JSON.parse(readFileSync(new URL('./fixtures/dashboard.json', import.meta.url), 'utf8')).tasks[0]
 
@@ -77,6 +77,31 @@ test('拖拽补填不覆盖已有日期', () => {
   moveTaskToLane(data, '1', 'done', 'a')
   assert.equal(task.startDate, '2026-01-01')
   assert.equal(task.date, '2026-01-10')
+})
+
+test('拖拽遇到过去截止日期或未来开始日期时保留空日期，状态和排序仍可保存', () => {
+  const today = todayISO()
+  const yesterday = dayToDate(dateToDay(today) - 1)
+  const tomorrow = dayToDate(dateToDay(today) + 1)
+  for (const [from, to, startDate, date, expectedStart, expectedDate] of [
+    ['planned', 'progress', '', yesterday, '', yesterday],
+    ['progress', 'done', tomorrow, '', tomorrow, ''],
+    ['planned', 'progress', '', today, today, today],
+    ['progress', 'done', today, '', today, today],
+    ['planned', 'progress', '', tomorrow, today, tomorrow],
+    ['progress', 'done', yesterday, '', yesterday, today],
+  ]) {
+    const data = fixture()
+    Object.assign(data.tasks[0], { status: from, startDate, date })
+    data.tasks[1].status = to
+    assert.equal(moveTaskToLane(data, '1', to, 'b', { targetId: 2, position: 'after' }), true)
+    const task = data.tasks.find(task => task.id === 1)
+    assert.equal(task.status, to)
+    assert.equal(task.startDate, expectedStart)
+    assert.equal(task.date, expectedDate)
+    assert.deepEqual(data.tasks.map(task => task.id), [2, 1, 3])
+    assert.deepEqual(parseDashboard(JSON.parse(JSON.stringify(data))), data)
+  }
 })
 
 test('其他状态转换、同状态跨项目以及无效拖拽不补填日期', () => {

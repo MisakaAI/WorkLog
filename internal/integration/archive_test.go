@@ -1,8 +1,11 @@
 package integration
 
 import (
+	"os"
+	"reflect"
 	"testing"
 	"worklog/internal/domain"
+	"worklog/internal/service"
 )
 
 func TestProjectArchive(t *testing.T) {
@@ -42,5 +45,49 @@ func TestProjectArchive(t *testing.T) {
 	deleted := typed[domain.Dashboard](t, httpOK(t, f, "PUT", "/api/dashboard", full))
 	if len(deleted.Projects) != 0 || len(deleted.Tasks) != 0 {
 		t.Fatal(deleted)
+	}
+}
+
+func TestArchivedCategoryMappingAndStableProjectRevision(t *testing.T) {
+	for _, driver := range []string{"sqlite", "postgres"} {
+		t.Run(driver, func(t *testing.T) {
+			if driver == "postgres" && os.Getenv("WORKLOG_TEST_POSTGRES_DSN") == "" {
+				t.Skip("WORKLOG_TEST_POSTGRES_DSN is not set")
+			}
+			f := setup(t, driver)
+			d := snapshotFixture()
+			d.Projects = []domain.Project{{ID: "a", Name: "Archived", Archived: true}, d.Projects[0]}
+			d.Tasks[1].ProjectID = "a"
+			saved := typed[domain.Dashboard](t, httpOK(t, f, "PUT", "/api/dashboard", d))
+			before := httpOK(t, f, "GET", "/api/projects", nil)["projectRevision"]
+			saved.PersonalLabel = "new label"
+			httpOK(t, f, "PUT", "/api/dashboard", saved)
+			if after := httpOK(t, f, "GET", "/api/projects", nil)["projectRevision"]; after != before {
+				t.Fatalf("ordinary save changed project revision: %v -> %v", before, after)
+			}
+			for i, change := range []struct {
+				drafts []service.CategoryDraft
+				tags   []string
+			}{
+				{[]service.CategoryDraft{{OriginalName: "A", Name: "A"}, {OriginalName: "B", Name: "Visual"}}, []string{"A", "Visual"}},
+				{[]service.CategoryDraft{{OriginalName: "A", Name: "Visual"}, {OriginalName: "Visual", Name: "A"}}, []string{"Visual", "A"}},
+				{[]service.CategoryDraft{{OriginalName: "Visual", Name: "Only"}}, []string{"Only", "Only"}},
+			} {
+				httpOK(t, f, "PUT", "/api/categories", map[string]any{"categoryRevision": i + 1, "categories": change.drafts})
+				full := typed[domain.Dashboard](t, httpOK(t, f, "GET", "/api/dashboard?includeArchived=true", nil))
+				if tags := []string{full.Tasks[0].Tag, full.Tasks[1].Tag}; !reflect.DeepEqual(tags, change.tags) {
+					t.Fatalf("category mapping %d: got %v, want %v", i, tags, change.tags)
+				}
+				if !reflect.DeepEqual(full.Projects, d.Projects) {
+					t.Fatal("ordinary save changed archived project order", full.Projects)
+				}
+			}
+			full := typed[domain.Dashboard](t, httpOK(t, f, "GET", "/api/dashboard?includeArchived=true", nil))
+			full.Projects[0].Archived = false
+			restored := typed[domain.Dashboard](t, httpOK(t, f, "PUT", "/api/dashboard", full))
+			if restored.Projects[0].ID != "a" || len(restored.Tasks) != 2 || restored.Tasks[1].Tag != "Only" {
+				t.Fatal("restore lost order or category mapping", restored)
+			}
+		})
 	}
 }

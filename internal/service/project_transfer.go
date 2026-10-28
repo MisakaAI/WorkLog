@@ -142,7 +142,7 @@ func (s *Service) ImportProjects(ctx context.Context, id domain.Identity, data [
 			t.Tag = categories[strings.ToLower(t.Tag)]
 			st.Tasks = append(st.Tasks, t)
 		}
-		if e = finalize(old, st, false, false); e != nil {
+		if e = finalize(u, old, st, false, false); e != nil {
 			return e
 		}
 		if e = u.Save(st); e != nil {

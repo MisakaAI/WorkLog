@@ -14,7 +14,7 @@ import TaskBoard from './components/TaskBoard.vue'
 import TaskDatePicker from './components/TaskDatePicker.vue'
 import GanttChart from './components/GanttChart.vue'
 import WorklogEditor from './components/WorklogEditor.vue'
-import { getDashboard, saveDashboard, visibleDashboard } from './api'
+import { getDashboard, manageCategories, saveDashboard, visibleDashboard } from './api'
 import { getBackendURL } from './api/client'
 import { exportProjects, importProjects, downloadProjects } from './api/projectTransfer'
 import { getCalendarDay } from './workCalendar'
@@ -24,7 +24,7 @@ import { newID } from './id'
 import {
   ALL_PROJECTS, columns, tags, priorities, cardColors, replaceProjects,
   filterTasks, todayISO, validateDates, validateProjects, projectLanes, moveTaskToLane,
-  validateCategories, replaceCategories,
+  validateCategories,
 } from './dashboard'
 import { useTheme } from './composables/useTheme'
 import { useDraftSort } from './composables/useDraftSort'
@@ -255,11 +255,14 @@ async function saveCategories() {
   const message = validateCategories(draftCategories.value.map(item => item.name))
   if (message) return ElMessage.warning(message)
   const selected = draftCategories.value.find(item => item.originalName === tag.value)
-  data.value = replaceCategories(data.value, draftCategories.value)
-  if (await persist()) {
+  persisting.value = true
+  try {
+    data.value = await manageCategories(data.value, draftCategories.value)
+    committed = JSON.parse(JSON.stringify(data.value))
     if (tag.value) tag.value = selected ? selected.name.trim() : ''
     categoryDialog.value = false
-  }
+  } catch (e) { ElMessage.error(`保存失败：${e.message}`) }
+  finally { persisting.value = false }
 }
 async function openProjects() {
   try {

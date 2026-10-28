@@ -10,6 +10,7 @@ import (
 	"errors"
 	"io/fs"
 	"log/slog"
+	"maps"
 	"net/url"
 	"os"
 	"path/filepath"
@@ -199,7 +200,7 @@ func (s *Store) Within(ctx context.Context, user string, write bool, fn func(rep
 		}
 		err = normalize(err)
 	}()
-	u := &unit{s: s, c: conn, ctx: ctx, user: user}
+	u := &unit{s: s, c: conn, ctx: ctx, user: user, versions: map[string]map[string]int64{"task": {}, "todo": {}}}
 	if write {
 		var result sql.Result
 		result, err = u.exec("INSERT INTO workspaces(user_id) VALUES (?) ON CONFLICT(user_id) DO NOTHING", user)
@@ -237,6 +238,8 @@ type unit struct {
 	c    *sql.Conn
 	ctx  context.Context
 	user string
+	// 缓存本事务已知的持久化版本，0 表示查询过但不存在，用于跳过未变化的写入。
+	versions map[string]map[string]int64
 }
 
 func (u *unit) exec(q string, args ...any) (sql.Result, error) {
@@ -315,32 +318,76 @@ func (u *unit) Load() (*domain.State, error) {
 	if err != nil {
 		return nil, err
 	}
-	// 删除资源后仍保留版本记录，避免同一 ID 被重新使用时接受旧版本请求。
-	rows, err = u.rows("SELECT kind,id,version FROM resource_versions WHERE user_id=?", u.user)
-	if err != nil {
-		return nil, err
+	// 普通读取只加载现存资源的版本，历史墓碑在复用 ID 时按需查询。
+	u.versions["task"] = maps.Clone(s.TaskVersions)
+	u.versions["todo"] = maps.Clone(s.TodoVersions)
+	return s, nil
+}
+
+func (u *unit) ResourceVersions(kind string, ids []string) (map[string]int64, error) {
+	known := u.versions[kind]
+	pending := []string{}
+	seen := map[string]bool{}
+	for _, id := range ids {
+		if _, ok := known[id]; !ok && !seen[id] {
+			pending = append(pending, id)
+			seen[id] = true
+		}
 	}
-	defer rows.Close()
-	for rows.Next() {
-		var kind, id string
-		var version int64
-		if err = rows.Scan(&kind, &id, &version); err != nil {
+	// 分批查询，兼容 SQLite / PostgreSQL 的参数数量限制，不扫描历史墓碑。
+	for len(pending) > 0 {
+		n := min(len(pending), 400)
+		batch := pending[:n]
+		args := []any{u.user, kind}
+		for _, id := range batch {
+			args = append(args, id)
+		}
+		rows, err := u.rows("SELECT id,version FROM resource_versions WHERE user_id=? AND kind=? AND id IN ("+strings.TrimSuffix(strings.Repeat("?,", n), ",")+")", args...)
+		if err != nil {
 			return nil, err
 		}
-		if kind == "task" {
-			s.TaskVersions[id] = version
-		} else {
-			s.TodoVersions[id] = version
+		versions, err := collect(rows, func(r *sql.Rows) (v struct {
+			id      string
+			version int64
+		}, e error) {
+			e = r.Scan(&v.id, &v.version)
+			return
+		})
+		if err != nil {
+			return nil, err
 		}
+		for _, id := range batch {
+			known[id] = 0
+		}
+		for _, v := range versions {
+			known[v.id] = v.version
+		}
+		pending = pending[n:]
 	}
-	return s, rows.Err()
+	out := map[string]int64{}
+	for _, id := range ids {
+		out[id] = known[id]
+	}
+	return out, nil
 }
 func (u *unit) Save(s *domain.State) error {
 	for kind, versions := range map[string]map[string]int64{"task": s.TaskVersions, "todo": s.TodoVersions} {
+		ids := make([]string, 0, len(versions))
+		for id := range versions {
+			ids = append(ids, id)
+		}
+		known, err := u.ResourceVersions(kind, ids)
+		if err != nil {
+			return err
+		}
 		for id, version := range versions {
+			if known[id] == version {
+				continue
+			}
 			if _, e := u.exec("INSERT INTO resource_versions(user_id,kind,id,version) VALUES (?,?,?,?) ON CONFLICT(user_id,kind,id) DO UPDATE SET version=excluded.version", u.user, kind, id, version); e != nil {
 				return e
 			}
+			u.versions[kind][id] = version
 		}
 	}
 	// 先删除依赖项，再在事务内重建已校验的数据关系。
