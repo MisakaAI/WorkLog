@@ -3,6 +3,29 @@ on: [push, pull_request]
 permissions:
   contents: read
 jobs:
+  macos-desktop:
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: npm
+          cache-dependency-path: Web/package-lock.json
+      - name: Build native AppKit bundle and DMG
+        run: bash scripts/build-macos.sh
+      - name: Check DMG contents and architecture
+        run: |
+          for image in bin/worklog-v*-macos-*.dmg; do
+            bash scripts/test-macos-dmg.sh "$image"
+          done
+      - run: go vet -tags desktop ./...
+      - run: go test -race -tags desktop ./...
   test:
     runs-on: ubuntu-latest
     services:

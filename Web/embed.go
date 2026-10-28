@@ -1,7 +1,8 @@
 //go:build desktop
 
 // Package web embeds the complete Vite production build, including Monaco workers.
-// Build Web/dist before compiling with -tags desktop (see scripts/build-windows.sh).
+// Build Web/dist before compiling with -tags desktop (see scripts/build-windows.sh
+// and scripts/build-macos.sh).
 package web
 
 import (

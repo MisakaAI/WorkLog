@@ -32,15 +32,20 @@ sudo bash ./install.sh  # 安装系统服务
 
 从 [Releases](https://github.com/MisakaAI/WorkLog/releases) 下载并运行 `worklog-v<版本>-windows-x86_64.exe`。这是原生系统托盘桌面版，使用默认浏览器打开界面，数据默认保存在 `%APPDATA%\WorklogDesktop`。详细说明见 [Windows 桌面版](docs/WINDOWS_DESKTOP.md)。
 
+### macOS
+
+在 Mac 上执行 `bash scripts/build-macos.sh`，生成原生 AppKit 菜单栏 `worklog.app` 及带版本、架构信息的 `.dmg` 安装镜像。打开镜像后将 `worklog.app` 拖入 Applications，启动后通过默认浏览器打开界面；菜单提供登录后启动及 SQLite 备份导入／导出。删除应用前请先取消登录后启动，注册文件不会随 `.app` 自动删除。数据默认保存在 `~/Library/Application Support/WorklogDesktop`。构建、配置和使用方式见 [macOS 桌面版](docs/MACOS_DESKTOP.md)。
+
 ## 发布版本
 
-发行版本以 Git tag 为唯一来源，不再维护仓库根目录的 `VERSION` 文件，也不支持通过 `VERSION` 环境变量覆盖。Linux / Windows 打包脚本共用 `scripts/release-version.sh`，取当前 `HEAD` 可达的最近 `v[0-9]*` 标签（`git describe --tags --abbrev=0`），并验证为 `vX.Y.Z`（可带预发行／构建后缀）。这不是跨分支按创建时间或版本大小取标签；标签后的开发提交沿用该标签版本，正式发布应在对应标签提交上构建。
+发行版本以 Git tag 为唯一来源，不再维护仓库根目录的 `VERSION` 文件，也不支持通过 `VERSION` 环境变量覆盖。Linux / Windows / macOS 打包脚本共用 `scripts/release-version.sh`，取当前 `HEAD` 可达的最近 `v[0-9]*` 标签（`git describe --tags --abbrev=0`），并验证为 `vX.Y.Z`（可带预发行／构建后缀）。这不是跨分支按创建时间或版本大小取标签；标签后的开发提交沿用该标签版本，正式发布应在对应标签提交上构建。
 
 ```sh
 # 先提交代码、脚本与文档，再创建发行标签：
 git tag -a v0.2.0-rc.1 -m "Release v0.2.0-rc.1"
 bash scripts/build-linux.sh
 bash scripts/build-windows.sh
+# 在 Mac 上还可构建：bash scripts/build-macos.sh
 # 需要发布到远端时，推送提交及标签：
 git push origin HEAD
 git push origin v0.2.0-rc.1
@@ -63,6 +68,7 @@ git push origin v0.2.0-rc.1
 
 - [部署、打包与源码构建](docs/DEPLOYMENT.md)：Releases 安装、Linux systemd 部署、打包构建、JSON 配置、Nginx、Docker 与 PostgreSQL。
 - [Windows 桌面版](docs/WINDOWS_DESKTOP.md)：Windows 托盘版行为与构建说明。
+- [macOS 桌面版](docs/MACOS_DESKTOP.md)：原生菜单栏、浏览器界面、单实例与 Mac 构建说明。
 - [身份认证与安全](docs/AUTHENTICATION.md)：本地／Basic／Bearer／stdio、权限矩阵与安全边界。
 - [REST API](docs/REST_API.md)：端点、细粒度资源、版本与幂等约定，以及前端快照协议。
 - [MCP 客户端指南](docs/MCP.md)：工具列表、Codex、HTTP 与 stdio 配置。

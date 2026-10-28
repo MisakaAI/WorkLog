@@ -1,4 +1,4 @@
-//go:build windows && desktop
+//go:build desktop && (windows || (darwin && cgo))
 
 package main
 
@@ -11,7 +11,6 @@ import (
 	"time"
 
 	"github.com/google/uuid"
-	"golang.org/x/sys/windows"
 	"worklog/internal/config"
 	"worklog/internal/storage"
 )
@@ -101,15 +100,7 @@ func switchDatabaseConfig(conf, destination string) (string, error) {
 	if err = f.Close(); err != nil {
 		return "", err
 	}
-	from, err := windows.UTF16PtrFromString(f.Name())
-	if err != nil {
-		return "", err
-	}
-	to, err := windows.UTF16PtrFromString(conf)
-	if err != nil {
-		return "", err
-	}
-	if err = windows.MoveFileEx(from, to, windows.MOVEFILE_REPLACE_EXISTING|windows.MOVEFILE_WRITE_THROUGH); err != nil {
+	if err = replaceConfigFile(f.Name(), conf); err != nil {
 		return "", err
 	}
 	return conf, nil

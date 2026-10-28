@@ -16,14 +16,6 @@ import (
 	"golang.org/x/sys/windows"
 )
 
-// BackupRequest selects an export directory or an existing database to import.
-// Import is false for export. The application, not the desktop host, performs
-// the operation; its callback must enqueue nonblockingly and serialize work.
-type BackupRequest struct {
-	Import bool
-	Path   string
-}
-
 // BROWSEINFOW and OPENFILENAMEW use natural pointer alignment on Windows.
 type nativeBrowseInfo struct {
 	Owner       uintptr

@@ -18,6 +18,9 @@ Vite 将 `/config.json` 和 `/api` 代理到 `127.0.0.1:12450`，直接复用 Go
 
 ```text
 cmd/worklog/                 HTTP / stdio、迁移与 SQLite 备份恢复命令
+cmd/worklog-desktop/         Windows 托盘 / macOS 菜单栏入口（desktop tag）
+internal/app/                共用 HTTP 监听、重启与优雅关闭
+internal/desktop/            平台原生菜单、浏览器、单实例与用户目录保护
 internal/config/             JSON 配置、内置默认值和私有令牌文件
 internal/domain/             模型、身份、公开错误和输入／富文本校验
 internal/service/            共用业务、事务、版本／幂等
