@@ -23,9 +23,112 @@
     </script>
     <meta name="description" content="Worklog 个人看板：管理任务与待办，简单、专注、实用。" />
     <title>Worklog · 个人看板</title>
+    <style>
+      /* 配置读取早于应用 CSS：首屏样式内联且限定在启动占位内，不依赖 Vue 或外部资源。 */
+      body { margin: 0; }
+      .startup-loader {
+        --startup-page: #edf0f5;
+        --startup-surface: #fafbfd;
+        --startup-text: #30333e;
+        --startup-muted: #595e6d;
+        --startup-accent: #705b9f;
+        --startup-edge: #fff;
+        --startup-panel-shadow: 8px 8px 24px #d7dce580, -6px -6px 20px #ffffffb3;
+        --startup-raised-shadow: 3px 3px 8px #cdd3df80, -3px -3px 8px #fff;
+        --startup-inset-shadow: inset 2px 2px 5px #cbd2df66, inset -2px -2px 5px #ffffffcc;
+        box-sizing: border-box;
+        display: grid;
+        place-items: center;
+        min-height: 100vh;
+        min-height: 100svh;
+        padding: 24px;
+        background: var(--startup-page);
+        color: var(--startup-text);
+        font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', 'PingFang SC', 'Hiragino Sans GB', 'Microsoft YaHei', 'Noto Sans CJK SC', sans-serif;
+        text-align: center;
+        -webkit-font-smoothing: antialiased;
+      }
+      :root.dark .startup-loader {
+        --startup-page: #171a21;
+        --startup-surface: #222630;
+        --startup-text: #e3e5ed;
+        --startup-muted: #bfc4d1;
+        --startup-accent: #bba7df;
+        --startup-edge: #393e4b;
+        --startup-panel-shadow: 8px 8px 24px #0d101866, -4px -4px 16px #30354233;
+        --startup-raised-shadow: 3px 3px 8px #0b0e1666, -2px -2px 6px #3a405233;
+        --startup-inset-shadow: inset 2px 2px 5px #0c0f1859, inset -2px -2px 5px #3a405226;
+      }
+      .startup-loader__card {
+        box-sizing: border-box;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        width: min(100%, 340px);
+        padding: 36px 24px 32px;
+        border: 1px solid var(--startup-edge);
+        border-radius: 20px;
+        background: var(--startup-surface);
+        box-shadow: var(--startup-panel-shadow);
+      }
+      .startup-loader__dial {
+        position: relative;
+        display: grid;
+        place-items: center;
+        width: 88px;
+        height: 88px;
+        margin-bottom: 24px;
+        border-radius: 50%;
+        background: var(--startup-page);
+        box-shadow: var(--startup-inset-shadow);
+      }
+      .startup-loader__ring {
+        position: absolute;
+        inset: 5px;
+        border: 2px solid transparent;
+        border-top-color: var(--startup-accent);
+        border-right-color: color-mix(in srgb, var(--startup-accent) 25%, transparent);
+        border-radius: 50%;
+        animation: startup-orbit 1.6s linear infinite;
+      }
+      .startup-loader__book {
+        display: grid;
+        place-items: center;
+        width: 56px;
+        height: 56px;
+        border: 1px solid var(--startup-edge);
+        border-radius: 18px;
+        color: var(--startup-accent);
+        background: var(--startup-surface);
+        box-shadow: var(--startup-raised-shadow);
+      }
+      .startup-loader__brand { margin: 0; font-size: 25px; font-weight: 700; line-height: 1.4; letter-spacing: -0.04em; }
+      .startup-loader__brand span { color: var(--startup-accent); }
+      .startup-loader__message { margin: 10px 0 0; color: var(--startup-muted); font-size: 14px; line-height: 1.7; letter-spacing: 0.01em; }
+      @keyframes startup-orbit { to { transform: rotate(360deg); } }
+      @media (prefers-reduced-motion: reduce) {
+        .startup-loader__ring { animation: none; }
+      }
+    </style>
   </head>
   <body>
-    <div id="app">正在加载配置…</div>
+    <div id="app">
+      <div class="startup-loader" role="status" aria-live="polite" aria-atomic="true">
+        <div class="startup-loader__card">
+          <div class="startup-loader__dial" aria-hidden="true">
+            <span class="startup-loader__ring"></span>
+            <span class="startup-loader__book">
+              <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
+                <rect x="4" y="3" width="16" height="18" rx="3" />
+                <path d="M8 3v18M15 3v7l2-1.5 2 1.5V3M11 14h5M11 17h3" />
+              </svg>
+            </span>
+          </div>
+          <h1 class="startup-loader__brand">Work<span>log</span></h1>
+          <p class="startup-loader__message">正在加载配置…</p>
+        </div>
+      </div>
+    </div>
     <script type="module" src="/src/bootstrap.js"></script>
   </body>
 </html>

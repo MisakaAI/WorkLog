@@ -43,9 +43,21 @@ export async function loadRuntimeConfig({
   return validateRuntimeConfig(value)
 }
 
-export async function startApplication({ loadApp = () => import('./main.js'), ...options } = {}) {
-  const config = await loadRuntimeConfig(options)
+export async function startApplication({
+  loadApp = () => import('./main.js'),
+  onConfigLoaded = () => {},
+  ...options
+} = {}) {
+  // 并行读取配置和加载应用资源，避免 config → JS/CSS 的串行瀑布。
+  // main.js 仅导出挂载函数，模块求值不会读取业务数据。
+  const [config, app] = await Promise.all([
+    loadRuntimeConfig(options).then(config => {
+      onConfigLoaded()
+      return config
+    }),
+    Promise.resolve().then(loadApp),
+  ])
   // 唯一用户配置源为公开 JSON；全局对象仅是兼容现有 API/日期组件的内部载体。
   globalThis.WORKLOG_CONFIG = config
-  await loadApp()
+  await app.mountApplication()
 }

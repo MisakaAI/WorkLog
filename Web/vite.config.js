@@ -21,6 +21,7 @@ export default defineConfig(({ command, isPreview }) => ({
   // 仅显式配置了后端地址时才会请求后端；API 代理可供开发联调使用。
   // preview 不继承开发代理，独立静态发布默认本地模式。
   server: {
+    allowedHosts: ['vite.misaka.cn'],
     proxy: command === 'serve' && !isPreview ? {
       '/api': { target: 'http://127.0.0.1:12450', changeOrigin: false },
     } : undefined,

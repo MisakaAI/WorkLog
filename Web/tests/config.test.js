@@ -87,7 +87,7 @@ test('公开配置严格校验，非法地址/时区/未知字段不能降级或
     { apiBaseUrl: '/api', businessTimezone: 'Asia/Shanghai' })
 })
 
-test('启动先加载 JSON 后加载应用；页面子目录、凭证与无缓存选项正确', async t => {
+test('并行加载 JSON 和应用资源，配置就绪后才挂载；子目录、凭证与无缓存选项正确', async t => {
   restoreConfig(t)
   const originalDocument = Object.getOwnPropertyDescriptor(globalThis, 'document')
   Object.defineProperty(globalThis, 'document', { configurable: true, value: { baseURI: 'https://example.test/worklog/' } })
@@ -107,11 +107,77 @@ test('启动先加载 JSON 后加载应用；页面子目录、凭证与无缓�
     },
     loadApp: async () => {
       events.push('app')
-      assert.equal(getBackendURL(), '/api')
-      assert.equal(globalThis.WORKLOG_CONFIG.businessTimezone, 'Asia/Shanghai')
+      return { mountApplication() {
+        events.push('mount')
+        assert.equal(getBackendURL(), '/api')
+        assert.equal(globalThis.WORKLOG_CONFIG.businessTimezone, 'Asia/Shanghai')
+      } }
     },
   })
-  assert.deepEqual(events, ['fetch', 'app'])
+  assert.deepEqual(events, ['fetch', 'app', 'mount'])
+})
+
+for (const first of ['config', 'app']) {
+  test(`${first} 先就绪：两条加载链路并行启动，但两者完成之前不挂载`, async t => {
+    restoreConfig(t)
+    globalThis.WORKLOG_CONFIG = { apiBaseUrl: '/original/api' }
+    let resolveConfig, resolveApp
+    const configReady = new Promise(resolve => { resolveConfig = resolve })
+    const appReady = new Promise(resolve => { resolveApp = resolve })
+    const events = []
+    const startup = startApplication({
+      configURL,
+      fetchImpl: () => { events.push('fetch'); return configReady },
+      loadApp: () => { events.push('app'); return appReady },
+      onConfigLoaded: () => events.push('config-ready'),
+    })
+    // 给微任务队列一次执行机会，不依赖耗时断言。
+    await new Promise(resolve => setImmediate(resolve))
+    assert.deepEqual(events, ['fetch', 'app'])
+    const releaseConfig = () => resolveConfig(response({ apiBaseUrl: '/api' }))
+    const releaseApp = () => resolveApp({ mountApplication() {
+      assert.equal(getBackendURL(), '/api')
+      events.push('mount')
+    } })
+    if (first === 'config') releaseConfig()
+    else releaseApp()
+    await new Promise(resolve => setImmediate(resolve))
+    assert.equal(events.includes('mount'), false)
+    assert.equal(getBackendURL(), '/original/api')
+    assert.equal(events.includes('config-ready'), first === 'config')
+    if (first === 'config') releaseApp()
+    else releaseConfig()
+    await startup
+    assert.deepEqual(events, ['fetch', 'app', 'config-ready', 'mount'])
+  })
+}
+
+test('应用资源失败立即结束启动；随后配置失败不会产生未处理拒绝或挂载', async t => {
+  restoreConfig(t)
+  globalThis.WORKLOG_CONFIG = { apiBaseUrl: '/original/api' }
+  let rejectConfig
+  const configReady = new Promise((_resolve, reject) => { rejectConfig = reject })
+  await assert.rejects(startApplication({ configURL,
+    fetchImpl: () => configReady,
+    loadApp: () => { throw new Error('资源加载失败') },
+  }), /资源加载失败/)
+  rejectConfig(new TypeError('network'))
+  await new Promise(resolve => setImmediate(resolve))
+  assert.equal(getBackendURL(), '/original/api')
+})
+
+test('配置失败不等待应用资源就报错，资源随后就绪也不会挂载', async t => {
+  restoreConfig(t)
+  let resolveApp
+  let mounted = false
+  const appReady = new Promise(resolve => { resolveApp = resolve })
+  await assert.rejects(startApplication({ configURL,
+    fetchImpl: async () => response(null, 403),
+    loadApp: () => appReady,
+  }), /HTTP 403/)
+  resolveApp({ mountApplication() { mounted = true } })
+  await new Promise(resolve => setImmediate(resolve))
+  assert.equal(mounted, false)
 })
 
 test('缺失、网络失败及超时阻止挂载，不切换为本地模式', async t => {
@@ -125,7 +191,7 @@ test('缺失、网络失败及超时阻止挂载，不切换为本地模式', as
     globalThis.WORKLOG_CONFIG = { apiBaseUrl: '/original/api' }
     let started = false
     await assert.rejects(startApplication({ configURL, fetchImpl, timeoutMs: 5,
-      loadApp: async () => { started = true },
+      loadApp: async () => ({ mountApplication() { started = true } }),
     }), /config.json/)
     assert.equal(started, false)
     assert.equal(getBackendURL(), '/original/api')
@@ -139,9 +205,11 @@ test('认证/服务端错误、JSON损坏及字段非法阻止启动，不静默
     async () => response({ apiBaseUrl: 'bad' }), async () => response(null),
   ]) {
     let started = false
-    await assert.rejects(startApplication({ configURL, fetchImpl, loadApp: async () => { started = true } }))
+    await assert.rejects(startApplication({ configURL, fetchImpl,
+      loadApp: async () => ({ mountApplication() { started = true } }),
+    }))
     assert.equal(started, false)
   }
-  // 直接加载器也返回独立配置，不在取回前执行应用代码。
+  // 直接加载器也返回独立配置，不在取回前挂载应用。
   assert.deepEqual(await loadRuntimeConfig({ configURL, fetchImpl: async () => response({}) }), {})
 })
