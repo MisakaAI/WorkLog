@@ -12,6 +12,7 @@ import (
 	"log/slog"
 	"os"
 	"path/filepath"
+	"reflect"
 	"time"
 	_ "time/tzdata"
 
@@ -119,6 +120,7 @@ func run() error {
 	// Buffered/coalescing commands keep the Win32 message thread responsive.
 	open := make(chan struct{}, 1)
 	restart := make(chan struct{}, 1)
+	backups := make(chan desktop.BackupRequest, 1)
 	enqueue := func(ch chan struct{}) {
 		select {
 		case ch <- struct{}{}:
@@ -141,9 +143,14 @@ func run() error {
 		go func() {
 			defer close(workerDone)
 			defer tray.Close()
-			runService(ctx, *conf, logger, tray, open, restart, browserRequests, !*background)
+			runService(ctx, *conf, logger, tray, open, restart, browserRequests, !*background, backups)
 		}()
-	}, func() { enqueue(open) }, func() { enqueue(restart) }, cancel, workerDone, autostart)
+	}, func() { enqueue(open) }, func() { enqueue(restart) }, cancel, workerDone, autostart, func(request desktop.BackupRequest) {
+		select {
+		case backups <- request:
+		default:
+		}
+	})
 	cancel()
 	if started {
 		<-workerDone
@@ -171,9 +178,10 @@ func openLog(root string) (*os.File, error) {
 // All initialization, restart and cleanup operations are serialized here.
 // The database, service, API handler and their process-scoped resources are
 // created once, not once per HTTP restart.
-func runService(ctx context.Context, conf string, logger *slog.Logger, tray *desktop.Tray, open, restart <-chan struct{}, browserRequests chan<- *app.HTTP, autoOpen bool) {
+func runService(ctx context.Context, conf string, logger *slog.Logger, tray *desktop.Tray, open, restart <-chan struct{}, browserRequests chan<- *app.HTTP, autoOpen bool, backups <-chan desktop.BackupRequest) {
 	var store *storage.Store
 	var server *app.HTTP
+	var activeConfig, nextStartConfig *config.Config
 	status := func(label string) {
 		tray.SetStatus(label)
 		logger.Info("desktop_service_state", "state", label)
@@ -194,7 +202,13 @@ func runService(ctx context.Context, conf string, logger *slog.Logger, tray *des
 			return err
 		}
 		if server == nil {
-			c, err := config.LoadDesktop(conf)
+			var c config.Config
+			var err error
+			if nextStartConfig != nil {
+				c = *nextStartConfig
+			} else {
+				c, err = config.LoadDesktop(conf)
+			}
 			if err != nil {
 				return diagnostics.Wrap("load_configuration", err)
 			}
@@ -204,6 +218,8 @@ func runService(ctx context.Context, conf string, logger *slog.Logger, tray *des
 			if err != nil {
 				return diagnostics.Wrap("initialize_database", err)
 			}
+			activeConfig = &c
+			nextStartConfig = nil
 			loc, _ := time.LoadLocation(c.Timezone)
 			svc := service.New(store, loc)
 			server = app.NewHTTP(c.Addr, rest.NewWithStaticFS(svc, c, logger, web.Assets()), logger)
@@ -273,6 +289,87 @@ func runService(ctx context.Context, conf string, logger *slog.Logger, tray *des
 			select {
 			case <-restart:
 			default:
+			}
+		case request := <-backups:
+			if ctx.Err() != nil {
+				return
+			}
+			var c config.Config
+			var err error
+			if activeConfig != nil {
+				c = *activeConfig
+			} else {
+				c, err = config.LoadDesktop(conf)
+			}
+			if err == nil && request.Import && activeConfig != nil {
+				var diskConfig config.Config
+				diskConfig, err = config.LoadDesktop(conf)
+				if err == nil && !reflect.DeepEqual(diskConfig, c) {
+					err = errors.New("配置文件已修改，请完整退出并重新启动 Worklog 后再导入备份")
+				}
+			}
+			if err == nil && c.Driver != "sqlite" {
+				err = errors.New("托盘导入／导出仅支持 SQLite；PostgreSQL 请使用 pg_dump / pg_restore")
+			}
+			if err != nil {
+				go desktop.ShowError("无法执行备份操作。\n" + err.Error())
+				continue
+			}
+			if !request.Import {
+				if store == nil {
+					go desktop.ShowError("数据库未就绪，请先重启服务。")
+					continue
+				}
+				status("● 正在导出备份")
+				path := newDatabasePath(request.Path, "worklog-backup")
+				err = store.Backup(ctx, path)
+				if err == nil {
+					err = storage.VerifySQLite(ctx, path)
+				}
+				if err != nil {
+					logger.Error("desktop_backup_failed", diagnostics.Fields(err)...)
+					go desktop.ShowError("导出备份失败。\n" + err.Error())
+				} else {
+					go desktop.ShowInfo("备份已导出：\n" + path + "\n备份包含私人数据，请妥善保管。")
+				}
+			} else {
+				status("● 正在导入备份")
+				// Failure recovery must use the configuration of the service we
+				// actually stopped, not apply unrelated edits made on disk.
+				nextStartConfig = &c
+				done = nil
+				if server != nil {
+					shutdownHTTP(server, logger)
+					server = nil
+				}
+				if store != nil {
+					err = store.Close()
+					store = nil
+				}
+				var nextConf, restored string
+				if err == nil {
+					nextConf, restored, err = importDatabase(ctx, c, conf, request.Path)
+				}
+				if err != nil {
+					logger.Error("desktop_restore_failed", diagnostics.Fields(err)...)
+					go desktop.ShowError("导入失败，未切换数据库；将尝试重新启动原服务。\n" + err.Error())
+				} else {
+					conf = nextConf
+					nextStartConfig = nil
+					go desktop.ShowInfo("备份已导入，原数据库已保留。\n新数据库：" + restored + "\n请重新打开 Worklog，检查任务与日志。")
+				}
+				if startErr := start(); startErr != nil {
+					logger.Error("desktop_restore_restart_failed", diagnostics.Fields(startErr)...)
+					status("● 服务异常")
+					go desktop.ShowError("服务启动失败，可从托盘重试。\n" + startErr.Error())
+					continue
+				}
+				done = server.Done()
+			}
+			if server != nil && server.URL() != "" {
+				status("● 服务运行中")
+			} else {
+				status("● 服务异常")
 			}
 		case err := <-done:
 			done = nil

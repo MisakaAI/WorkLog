@@ -49,6 +49,8 @@ const (
 	menuRestart    = 103
 	menuQuit       = 104
 	menuAutostart  = 105
+	menuExport     = 106
+	menuImport     = 107
 	iconRetryTimer = 1
 )
 
@@ -140,6 +142,9 @@ type Tray struct {
 	status       string
 	statusPosted bool
 
+	backupBusy atomic.Bool         // selection, confirmation and callback dispatch
+	onBackup   func(BackupRequest) // immutable after initialization
+
 	// The remaining fields are used exclusively by the message-loop thread.
 	window         uintptr
 	menu           uintptr
@@ -158,12 +163,16 @@ type Tray struct {
 }
 
 // RunTray runs a native Windows message loop until Tray.Close is requested.
-// All callbacks (including onReady) run on this OS thread and MUST be
+// Lifecycle callbacks (including onReady) run on this OS thread and MUST be
 // nonblocking: only enqueue application work. Quit requests call onQuit once;
 // the application decides when shutdown is finished and calls Tray.Close.
 // During WM_ENDSESSION only, the host waits up to four seconds for shutdownDone
 // before acknowledging session termination; it never vetoes logoff/shutdown.
-func RunTray(onReady func(*Tray), onOpen func(), onRestart func(), onQuit func(), shutdownDone <-chan struct{}, autostart *Autostart) error {
+// The optional backup callback runs on an independent locked OS thread. Like
+// the other callbacks it must only enqueue work nonblockingly; the application
+// owns serialization of the actual backup operations. Only the first callback
+// is used when more than one is supplied.
+func RunTray(onReady func(*Tray), onOpen func(), onRestart func(), onQuit func(), shutdownDone <-chan struct{}, autostart *Autostart, onBackup ...func(BackupRequest)) error {
 	runtime.LockOSThread()
 	defer runtime.UnlockOSThread()
 
@@ -213,6 +222,9 @@ func RunTray(onReady func(*Tray), onOpen func(), onRestart func(), onQuit func()
 	t := &Tray{
 		hwnd: hwnd, window: hwnd, icon: icon, taskbarCreated: uint32(taskbar),
 		status: "● 服务启动中", onOpen: onOpen, onRestart: onRestart, onQuit: onQuit, shutdownDone: shutdownDone, autostart: autostart,
+	}
+	if len(onBackup) != 0 {
+		t.onBackup = onBackup[0]
 	}
 	trayWindows.Store(hwnd, t)
 	defer t.dispose()
@@ -393,6 +405,10 @@ func (t *Tray) command(id uint32) {
 		if t.onRestart != nil {
 			t.onRestart()
 		}
+	case menuExport, menuImport:
+		if !t.quitRequested {
+			t.requestBackup(id == menuImport)
+		}
 	case menuAutostart:
 		if t.autostart == nil || t.quitRequested {
 			return
@@ -403,7 +419,11 @@ func (t *Tray) command(id uint32) {
 		}
 		if err != nil {
 			slog.Error("autostart_update_failed", "error", err)
-			ShowError("无法修改开机启动设置，请查看 worklog.log。")
+			go func() {
+				runtime.LockOSThread()
+				defer runtime.UnlockOSThread()
+				ShowError("无法修改开机启动设置，请查看 worklog.log。")
+			}()
 		} else {
 			slog.Info("autostart_updated", "enabled", !enabled)
 		}
@@ -436,11 +456,17 @@ func (t *Tray) createMenu() error {
 		{menuOpen, 0, "打开 Worklog"},
 		{menuRestart, 0, "重启服务"},
 		{0, mfSeparator, ""},
+		{menuExport, 0, "导出备份…"},
+		{menuImport, 0, "导入备份…"},
+		{0, mfSeparator, ""},
 		{menuAutostart, 0, "开机启动"},
 		{0, mfSeparator, ""},
 		{menuQuit, 0, "退出 Worklog"},
 	}
 	for _, item := range items {
+		if (item.id == menuExport || item.id == menuImport) && t.onBackup == nil {
+			item.flags = mfDisabled
+		}
 		label := menuText(item.label)
 		if ok, _, err := appendMenuW.Call(menu, uintptr(item.flags), uintptr(item.id), uintptr(unsafe.Pointer(label))); ok == 0 {
 			return nativeError("append tray menu item", err)
