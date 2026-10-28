@@ -462,18 +462,16 @@ func (t *Tray) createMenu() error {
 		flags uint32
 		label string
 	}{
-		{menuTitle, mfDisabled, "Worklog"},
+		{menuOpen, 0, "打开 Worklog"},
 		{0, mfSeparator, ""},
 		{menuStatus, mfDisabled | mfOwnerDraw, ""},
 		{0, mfSeparator, ""},
-		{menuOpen, 0, "打开 Worklog"},
-		{menuRestart, 0, "重启服务"},
-		{0, mfSeparator, ""},
-		{menuExport, 0, "导出备份…"},
 		{menuImport, 0, "导入备份…"},
+		{menuExport, 0, "导出备份…"},
 		{0, mfSeparator, ""},
 		{menuAutostart, 0, "开机启动"},
 		{0, mfSeparator, ""},
+		{menuRestart, 0, "重启服务"},
 		{menuQuit, 0, "退出 Worklog"},
 	}
 	for _, item := range items {
