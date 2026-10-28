@@ -23,6 +23,8 @@ const (
 	wmQueryEndSession = 0x0011
 	wmEndSession      = 0x0016
 	wmNull            = 0x0000
+	wmMeasureItem     = 0x002C
+	wmDrawItem        = 0x002B
 	wmCommand         = 0x0111
 	wmTimer           = 0x0113
 	wmContextMenu     = 0x007B
@@ -39,6 +41,7 @@ const (
 	nifIcon    = 0x2
 	nifTip     = 0x4
 
+	mfOwnerDraw = 0x100
 	mfDisabled  = 0x3 // MF_GRAYED | MF_DISABLED
 	mfSeparator = 0x800
 	mfChecked   = 0x8
@@ -148,6 +151,7 @@ type Tray struct {
 	// The remaining fields are used exclusively by the message-loop thread.
 	window         uintptr
 	menu           uintptr
+	menuStatusText string  // UI-thread snapshot used by owner-draw callbacks
 	icon           uintptr // LoadIcon returns shared icons, never DestroyIcon
 	taskbarCreated uint32
 	iconAdded      bool
@@ -259,9 +263,9 @@ func RunTray(onReady func(*Tray), onOpen func(), onRestart func(), onQuit func()
 	}
 }
 
-// SetStatus replaces the entire disabled status label; it does not add a
-// prefix, interpret service state, or perform lifecycle work. Updates coalesce
-// if the UI thread has not yet processed the previous one.
+// SetStatus replaces the disabled status label and its native colored dot.
+// Legacy leading ● markers are omitted from the drawn text. It performs no
+// lifecycle work. Updates coalesce until the UI thread processes them.
 func (t *Tray) SetStatus(status string) {
 	if t == nil {
 		return
@@ -342,6 +346,14 @@ func trayWndProc(hwnd uintptr, message uint32, wParam, lParam uintptr) uintptr {
 	case wmCommand:
 		t.command(uint32(wParam & 0xffff))
 		return 0
+	case wmMeasureItem:
+		if lParam != 0 && t.measureStatus((*nativeMeasureItem)(unsafe.Pointer(lParam))) {
+			return 1
+		}
+	case wmDrawItem:
+		if lParam != 0 && t.drawStatus((*nativeDrawItem)(unsafe.Pointer(lParam))) {
+			return 1
+		}
 	case wmTrayStatus:
 		t.applyStatus()
 		return 0
@@ -444,6 +456,7 @@ func (t *Tray) createMenu() error {
 		return nativeError("create tray menu", err)
 	}
 	t.menu = menu // dispose also covers partial initialization
+	t.menuStatusText = t.status
 	items := []struct {
 		id    uint32
 		flags uint32
@@ -451,7 +464,7 @@ func (t *Tray) createMenu() error {
 	}{
 		{menuTitle, mfDisabled, "Worklog"},
 		{0, mfSeparator, ""},
-		{menuStatus, mfDisabled, t.status},
+		{menuStatus, mfDisabled | mfOwnerDraw, ""},
 		{0, mfSeparator, ""},
 		{menuOpen, 0, "打开 Worklog"},
 		{menuRestart, 0, "重启服务"},
@@ -468,6 +481,9 @@ func (t *Tray) createMenu() error {
 			item.flags = mfDisabled
 		}
 		label := menuText(item.label)
+		if item.id == menuStatus {
+			label = nil // owner-draw item data, never a Go pointer
+		}
 		if ok, _, err := appendMenuW.Call(menu, uintptr(item.flags), uintptr(item.id), uintptr(unsafe.Pointer(label))); ok == 0 {
 			return nativeError("append tray menu item", err)
 		}
@@ -524,9 +540,10 @@ func (t *Tray) applyStatus() {
 	status := t.status
 	t.statusPosted = false
 	t.mu.Unlock()
-	label := menuText(status)
-	// MF_BYCOMMAND and MF_STRING are zero; retain the disabled status item.
-	if ok, _, err := modifyMenuW.Call(t.menu, menuStatus, mfDisabled, menuStatus, uintptr(unsafe.Pointer(label))); ok == 0 {
+	t.menuStatusText = status
+	// MF_BYCOMMAND is zero. Retain owner-draw and disabled flags; item data
+	// stays zero because callbacks identify this row by its command ID.
+	if ok, _, err := modifyMenuW.Call(t.menu, menuStatus, mfDisabled|mfOwnerDraw, menuStatus, 0); ok == 0 {
 		slog.Warn("update tray menu status", "error", nativeError("ModifyMenuW", err))
 	}
 	if t.iconAdded {
