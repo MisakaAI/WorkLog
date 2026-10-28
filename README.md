@@ -14,44 +14,22 @@ Worklog 是一个单用户工作台，支持项目与任务管理、待办事项
 
 ## 部署与启动
 
-在项目根目录构建前端和 Go 服务：
+### Linux
+
+从 [Releases](https://github.com/MisakaAI/WorkLog/releases) 下载与主机架构匹配的 `.tar.zst` 发布包（`linux-x86_64` 为 amd64，`linux-arm64` 为 arm64），解压后运行安装脚本：
 
 ```sh
-(cd Web && npm ci && npm run build)
-go build -o bin/worklog ./cmd/worklog
-./bin/worklog
+tar --zstd -xf worklog-v<版本>-linux-x86_64.tar.zst
+cd worklog-v<版本>-linux-x86_64
+sudo bash ./install.sh  # 安装系统服务
+# 或 bash ./install.sh，以当前用户安装 systemd 用户服务
 ```
 
-打开 **http://127.0.0.1:12450** 即可使用。Go 服务同时提供前端静态文件、`/api` 和 `/mcp`，无需单独启动前端服务器。
+默认访问 **http://127.0.0.1:12450**。用户服务如需开机运行且退出登录后保持运行，需管理员执行 `sudo loginctl enable-linger 用户名`。详细安装、配置、升级与维护见[部署文档](docs/DEPLOYMENT.md)。
 
-首次启动自动创建 `data/worklog.db`、执行迁移并生成 MCP 令牌文件 `data/mcp-token`，不注入示例业务数据。  
-请从项目根目录运行，默认配置使用相对路径。SQLite 数据应放在本机磁盘，不要放在 NFS / SMB 上。
+### Windows
 
-默认仅监听本机地址。同机其他进程也可以访问 REST，不是安全隔离边界；  
-共享电脑建议设置 Basic 密码，详见[身份认证与安全](docs/AUTHENTICATION.md)。  
-自定义配置仅使用 JSON 文件：将 [config.example.json](config.example.json) 复制为 `/etc/worklog/config.json` 并修改其中路径，再执行：
-
-```sh
-./bin/worklog --conf=/etc/worklog
-```
-
-`--conf` 支持目录或 JSON 文件；省略字段使用内置默认值。不指定时仅使用内置默认值，不自动搜索配置文件。程序不读取业务配置环境变量或 `.env`。配置文件权限建议设为 `0600`。
-
-自定义配置、Nginx 反向代理及 Docker / PostgreSQL 部署见[部署与配置](docs/DEPLOYMENT.md)。
-
-## Windows 托盘桌面版
-
-桌面版为单文件 `worklog-v<版本号>-windows-x86_64.exe`：Go 单进程原生系统托盘 + 本机 HTTP 服务 + 嵌入式 Vue，界面使用默认浏览器，无需 Electron 或 WebView。支持单实例、打开页面、进程内重启、可选开机启动（默认关闭）和有序退出；数据默认保存在 `%APPDATA%\WorklogDesktop`。
-
-Linux 下构建 Windows x64：
-
-```sh
-bash scripts/build-windows.sh
-# 默认读取 VERSION，当前产物：bin/worklog-v0.1.0-windows-x86_64.exe
-# 可覆盖版本号：VERSION=0.2.0 bash scripts/build-windows.sh
-```
-
-构建依赖和配置兼容说明见 [Windows 桌面版](docs/WINDOWS_DESKTOP.md)。Windows GUI 行为尚需实机验证。
+从 [Releases](https://github.com/MisakaAI/WorkLog/releases) 下载并运行 `worklog-v<版本>-windows-x86_64.exe`。这是原生系统托盘桌面版，使用默认浏览器打开界面，数据默认保存在 `%APPDATA%\WorklogDesktop`。详细说明见 [Windows 桌面版](docs/WINDOWS_DESKTOP.md)。
 
 ## 简单使用
 
@@ -64,8 +42,8 @@ bash scripts/build-windows.sh
 
 ## 文档
 
-- [部署与配置](docs/DEPLOYMENT.md)：JSON 配置、Nginx 反向代理、Docker 与 PostgreSQL。
-- [systemd 持久运行](docs/SYSTEMD.md)：专用用户、配置文件、开机自启、日志与服务维护，附 [worklog.service 示例](docs/worklog.service)。
+- [部署、打包与源码构建](docs/DEPLOYMENT.md)：Releases 安装、Linux systemd 部署、打包构建、JSON 配置、Nginx、Docker 与 PostgreSQL。
+- [Windows 桌面版](docs/WINDOWS_DESKTOP.md)：Windows 托盘版行为与构建说明。
 - [身份认证与安全](docs/AUTHENTICATION.md)：本地／Basic／Bearer／stdio、权限矩阵与安全边界。
 - [REST API](docs/REST_API.md)：端点、细粒度资源、版本与幂等约定，以及前端快照协议。
 - [MCP 客户端指南](docs/MCP.md)：工具列表、Codex、HTTP 与 stdio 配置。

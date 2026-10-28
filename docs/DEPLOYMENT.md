@@ -1,6 +1,6 @@
 # 部署与配置
 
-基本构建与本机启动见 [README](../README.md#部署与启动)，认证细节见[身份认证与安全](AUTHENTICATION.md)。  
+Linux 优先从 [Releases](https://github.com/MisakaAI/WorkLog/releases) 下载 `.tar.zst` 预编译包部署，目标主机无需 Go / Node.js；下载部署与自行编译发布包的独立步骤见 [Linux / systemd 部署](DEPLOYMENT.md#linux-systemd-部署)。源码构建、发布包打包与部署流程见本文后续章节；认证细节见[身份认证与安全](AUTHENTICATION.md)。
 远程访问推荐同源部署：Nginx → 本机 Go 服务，由 Go 提供前端、`/api` 和 `/mcp`。
 
 ## JSON 配置
@@ -63,7 +63,7 @@ install -m 600 config.example.json /etc/worklog/config.json
 
 ## systemd 持久运行
 
-Linux 主机使用编译后的程序长期运行，可按 [systemd 部署说明](SYSTEMD.md)安装：使用专用非 root 用户、`/etc/worklog/config.json` 配置，实现开机自启、异常退出重启和 journald 日志管理。服务单元模板见 [worklog.service](worklog.service)。
+按 [Linux Systemd 部署说明](DEPLOYMENT.md#linux-systemd-部署)解压发布包并运行 `install.sh`：root 执行时安装系统服务，创建／复用专用 `worklog` 用户，配置位于 `/etc/worklog/config.json`；非 root 执行时默认以当前用户安装 systemd 用户服务，配置位于 `~/.config/worklog/config.json`（支持 XDG 路径）。重复安装保留已有配置和数据。系统服务模板见 [worklog.service](worklog.service)，用户服务由安装脚本单独生成。
 
 ## 配置字段
 
@@ -203,7 +203,7 @@ PostgreSQL 使用 advisory session lock；SQLite 升级应由一个部署启动�
 ./bin/worklog --conf=/etc/worklog
 ```
 
-正式运行推荐使用 [systemd](SYSTEMD.md) 保持服务运行。
+正式运行推荐使用 [systemd](DEPLOYMENT.md#linux-systemd-部署) 保持服务运行。
 
 ### 配置 Nginx
 
@@ -295,3 +295,205 @@ location / { return 404; }
 ```
 
 静态资源采用相对路径，Go 的动态配置仍指向根 `/api`。正式环境需实际验证 TLS、代理和客户端行为，不能以本地测试代替公网验收。
+
+
+## Linux systemd 部署
+
+
+Worklog 在 Linux 下以一个 Go 进程提供前端静态文件、REST API 和 MCP。前后端构建产物分文件安装，不需要运行 Node.js、Vite 或单独的前端服务。
+
+推荐从 Releases 下载预编译包；需要修改源码时再自行构建。两种方式最终使用相同的安装脚本。
+
+## 1. 从 Releases 下载部署（推荐）
+
+在 [Releases](https://github.com/MisakaAI/WorkLog/releases) 下载与主机架构匹配的文件：
+
+| `uname -m` | 发布包 |
+| --- | --- |
+| `x86_64` | `worklog-v<版本>-linux-x86_64.tar.zst`（Go amd64） |
+| `aarch64` / `arm64` | `worklog-v<版本>-linux-arm64.tar.zst` |
+
+目标主机需要 Linux、systemd、Bash、GNU 常用文件工具、支持 zstd 的 tar 和 `zstd`，不需要 Go、Node.js 或独立数据库。Debian / Ubuntu 可通过 `sudo apt install zstd` 安装解压依赖。
+
+例如下载后解压（将版本号替换为实际版本）：
+
+```sh
+tar --zstd -xf worklog-v0.1.0-linux-x86_64.tar.zst
+cd worklog-v0.1.0-linux-x86_64
+```
+
+压缩包包含 `bin/worklog`、`Web/dist/`、`install.sh`、配置示例、systemd 模板、版本与架构信息及运维文档。
+
+### A. root 安装：系统服务
+
+```sh
+sudo bash ./install.sh
+```
+
+脚本默认创建专用 `worklog` 系统用户（已存在则复用），**服务不以 root 运行**。安装后自动启动并设置开机自启：
+
+| 路径 | 用途与权限 |
+| --- | --- |
+| `/opt/worklog/bin/worklog` | 后端，root 管理 |
+| `/opt/worklog/Web/dist` | 前端产物，服务用户只读 |
+| `/etc/worklog/config.json` | root 管理，服务主组只读，`0640` |
+| `/var/lib/worklog` | 数据库、WAL 和令牌，worklog 可写，`0700` |
+| `/etc/systemd/system/worklog.service` | 系统服务单元 |
+
+root 模式使用 [worklog.service](worklog.service) 模板，默认账户主组为 `worklog`；复用已有账户时配置文件使用该账户实际主组。
+
+### B. 普通用户安装：当前用户服务
+
+**不使用 sudo** 执行：
+
+```sh
+bash ./install.sh
+```
+
+脚本不会创建用户，而是以当前用户运行 `systemd --user` 服务：
+
+| 路径 | 用途 |
+| --- | --- |
+| `~/.local/share/worklog/app/bin/worklog` | 后端 |
+| `~/.local/share/worklog/app/Web/dist` | 前端 |
+| `~/.config/worklog/config.json` | 当前用户配置，`0600` |
+| `~/.local/share/worklog/data` | 数据和令牌，`0700` |
+| `~/.config/systemd/user/worklog.service` | 用户服务单元 |
+
+支持绝对路径的 `XDG_DATA_HOME` 和 `XDG_CONFIG_HOME` 覆盖上述基础目录。这些是安装路径约定，不是 Worklog 业务配置环境变量。
+
+需要当前用户的 systemd 用户管理器可访问；请通过正常登录会话执行，不要简单使用 `sudo -u`。脚本会在修改文件前检查连接。用户服务使用单独生成的单元，不使用系统服务的 `User=worklog`、`ProtectHome` 或 `StateDirectory`。
+
+默认随用户管理器启动。若需要**开机即运行、退出登录后仍保持运行**，由管理员执行：
+
+```sh
+sudo loginctl enable-linger 用户名
+```
+
+用户服务与系统服务默认都使用 `127.0.0.1:12450`；不要同时安装运行两份而不修改端口和数据路径。
+
+## 2. 自行编译再部署
+
+只在构建机器上安装 [README](../README.md#开发环境) 要求的 Go、Node.js / npm，以及 tar、zstd。编译不需要 root：
+
+```sh
+bash scripts/build-linux.sh
+# Go 不在 PATH 时：
+# GO=/opt/go/bin/go bash scripts/build-linux.sh
+# 覆盖发布版本：
+# VERSION=0.2.0 bash scripts/build-linux.sh
+```
+
+脚本只构建一次前端，然后以 `CGO_ENABLED=0` 交叉编译 Linux amd64 和 arm64，输出：
+
+```text
+bin/worklog-v<版本>-linux-x86_64.tar.zst
+bin/worklog-v<版本>-linux-arm64.tar.zst
+```
+
+默认版本读取仓库 `VERSION`。不需要 Windows SDK、目标架构编译器或目标机器上的构建工具。将对应压缩包复制到目标主机，按第 1 节解压安装；**不要直接在源码仓库运行 `scripts/install-linux.sh`**，安装脚本依赖发布包布局。
+
+开发环境中从源码构建并手动启动，可在项目根目录执行：
+
+```sh
+(cd Web && npm ci && npm run build)
+go build -o bin/worklog ./cmd/worklog
+./bin/worklog
+```
+
+打开 `http://127.0.0.1:12450` 即可使用。首次启动会创建 `data/worklog.db`、执行迁移并生成 MCP 令牌文件。需要打包给 Linux 主机部署时，使用上文的 `scripts/build-linux.sh` 生成 Releases 格式发布包；不要直接在源码仓库运行安装脚本。
+
+## 3. 配置与远程访问
+
+首次安装生成使用绝对路径的最小 SQLite 配置，仅监听 `127.0.0.1:12450`。启动时自动创建数据库、执行迁移，并生成 MCP 读写令牌文件；无需额外执行迁移命令。
+
+打开 **http://127.0.0.1:12450**。系统级服务工作目录为 `/var/lib/worklog`，用户级为对应 `data` 目录。所有业务配置仅来自 JSON；相对路径按服务工作目录解析，建议保留绝对路径。
+
+编辑配置后重启：
+
+```sh
+# 系统服务
+sudoedit /etc/worklog/config.json
+sudo systemctl restart worklog.service
+
+# 用户服务（按自己的 XDG 路径调整）
+"${EDITOR:-vi}" ~/.config/worklog/config.json
+systemctl --user restart worklog.service
+```
+
+完整字段见 [部署与配置](DEPLOYMENT.md)。配置包含秘密，不要放进静态目录或版本库。SQLite 数据必须位于本机磁盘，不要使用 NFS / SMB。
+
+远程部署推荐 Nginx / Caddy / Cloudflare Tunnel → 本机 Worklog，外部入口使用 HTTPS。必须另外设置 Worklog 的独立 Basic 密码、写令牌，以及实际域名的 `allowed_hosts` 和 HTTPS `allowed_origins`；代理应保留实际 Host。Cloudflare Access 不替代 Worklog 自身认证。具体示例见 [Nginx HTTPS 反向代理](DEPLOYMENT.md#nginx-https-反向代理)和[身份认证与安全](AUTHENTICATION.md)。
+
+安装脚本不会修改防火墙、开放公网监听、安装代理或生成 TLS 证书。
+
+## 4. 状态、日志和日常维护
+
+系统服务：
+
+```sh
+sudo systemctl status worklog.service --no-pager
+sudo journalctl -u worklog.service -n 100 --no-pager
+sudo journalctl -u worklog.service -f
+sudo systemctl restart worklog.service
+sudo systemctl disable --now worklog.service
+```
+
+用户服务：
+
+```sh
+systemctl --user status worklog.service --no-pager
+journalctl --user -u worklog.service -n 100 --no-pager
+journalctl --user -u worklog.service -f
+systemctl --user restart worklog.service
+systemctl --user disable --now worklog.service
+```
+
+健康检查：
+
+```sh
+curl --fail http://127.0.0.1:12450/healthz
+# 若移除了本机 Host 白名单，指定允许的域名：
+# curl --fail -H 'Host: worklog.example.com' http://127.0.0.1:12450/healthz
+```
+
+修改单元后需执行对应的 `systemctl [--user] daemon-reload` 再重启；仅修改 JSON 不需要 daemon-reload。日志进入 journald，其持久化与轮转由主机配置决定。
+
+启动失败时检查日志中的配置、权限、端口占用和路径问题；触发启动频率限制后，修复问题并执行对应的 `systemctl [--user] reset-failed worklog.service`，再启动。
+
+## 5. 升级与备份
+
+**先备份，再升级。** 解压新版本，用与原安装相同的身份及 XDG 路径重新执行 `install.sh`：
+
+- 保留已有 `config.json`，不自动合并新版本配置。
+- 保留数据库、令牌和数据目录；不会从压缩包注入业务数据。
+- 准备新文件后停止已有服务，再替换二进制和整套前端，更新服务单元并启动。
+- 不在运行中直接覆盖可执行文件，也不混用两个版本的前端资源。
+- 安装脚本会覆盖对应服务单元；自行修改的单元应先备份，持久自定义优先使用 systemd drop-in。
+
+脚本会检查服务是否处于运行状态，但不保证后续运行永不出错，也不自动恢复数据库或回滚失败升级。**数据库迁移可能不可逆，回滚程序不等于回滚数据库。**
+
+系统服务的 SQLite 在线备份示例：
+
+```sh
+sudo -u worklog install -d -m 700 /var/lib/worklog/backups
+sudo -u worklog sh -c 'cd /var/lib/worklog && /opt/worklog/bin/worklog --conf=/etc/worklog backup "/var/lib/worklog/backups/worklog-$(date +%Y%m%d-%H%M%S).db"'
+```
+
+用户服务（默认路径）：
+
+```sh
+mkdir -p ~/.local/share/worklog/data/backups
+~/.local/share/worklog/app/bin/worklog --conf="$HOME/.config/worklog/config.json" \
+  backup "$HOME/.local/share/worklog/data/backups/worklog-$(date +%Y%m%d-%H%M%S).db"
+```
+
+备份目标必须不存在。不要只复制运行中的 `.db`，应将备份另存到其他存储。PostgreSQL 使用专用备份工具，恢复步骤见[备份与恢复](OPERATIONS.md)。
+
+## 6. 卸载与安全边界
+
+目前不提供自动删除数据的卸载命令。先 `disable --now` 停止对应服务，再删除对应单元并 `daemon-reload`；程序目录可以删除，配置和数据默认应保留，确认备份后再自行清理。不要误删用户安装下与 app 相邻的 data 目录。
+
+系统服务启用只读文件系统、隐藏 home、无 capabilities、禁止提权、私有临时目录，只有状态目录可持久写入。若改变数据或令牌路径，需要同步调整目录权限与服务沙箱。用户服务不提供同等文件系统沙箱，它以当前用户权限访问文件，适合个人安装而非安全隔离。
+
+两种服务均使用 `UMask=0077`、异常退出重启和 SIGTERM 优雅退出。系统模式需支持模板中的 systemd 指令，可用 `sudo systemd-analyze verify /etc/systemd/system/worklog.service` 检查。SELinux / AppArmor、容器或受限主机可能需要额外策略。安装脚本不会自动配置这些策略。
