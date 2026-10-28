@@ -1,6 +1,7 @@
 import vue from '@vitejs/plugin-vue'
 import { defineConfig } from 'vite'
 import { fileURLToPath } from 'node:url'
+import { startupPreloads } from './startupPreloads.js'
 
 // 仅替换 HTML 语言服务的 worker 桥接入口，避免其隐式注册全量编辑功能。
 function monacoHTMLWorkerBridge() {
@@ -26,7 +27,7 @@ export default defineConfig(({ command, isPreview }) => ({
       '/api': { target: 'http://127.0.0.1:12450', changeOrigin: false },
     } : undefined,
   },
-  plugins: [vue(), { ...monacoHTMLWorkerBridge(), enforce: 'pre' }],
+  plugins: [vue(), { ...monacoHTMLWorkerBridge(), enforce: 'pre' }, startupPreloads()],
   // 开发预构建也必须使用相同桥接，避免 HTML 懒加载后重新引入全量功能。
   optimizeDeps: {
     rolldownOptions: { plugins: [monacoHTMLWorkerBridge()] },

@@ -75,8 +75,8 @@
         position: relative;
         display: grid;
         place-items: center;
-        width: 88px;
-        height: 88px;
+        width: 124px;
+        height: 124px;
         margin-bottom: 24px;
         border-radius: 50%;
         background: var(--startup-page);
@@ -84,30 +84,47 @@
       }
       .startup-loader__ring {
         position: absolute;
-        inset: 5px;
-        border: 2px solid transparent;
-        border-top-color: var(--startup-accent);
-        border-right-color: color-mix(in srgb, var(--startup-accent) 25%, transparent);
-        border-radius: 50%;
-        animation: startup-orbit 1.6s linear infinite;
+        inset: 6px;
+        width: 112px;
+        height: 112px;
+        overflow: visible;
+        animation: startup-orbit 1.2s ease-out infinite;
+        will-change: transform;
       }
-      .startup-loader__book {
-        display: grid;
-        place-items: center;
-        width: 56px;
-        height: 56px;
-        border: 1px solid var(--startup-edge);
-        border-radius: 18px;
-        color: var(--startup-accent);
-        background: var(--startup-surface);
-        box-shadow: var(--startup-raised-shadow);
+      .startup-loader__arc {
+        fill: none;
+        stroke: var(--startup-accent);
+        stroke-width: 4;
+        stroke-linecap: round;
+        stroke-dasharray: 12 88;
+        stroke-dashoffset: 0;
+        animation: startup-stretch 1.2s ease-in-out infinite;
+      }
+      .startup-loader__logo {
+        display: block;
+        width: 80px;
+        height: 80px;
       }
       .startup-loader__brand { margin: 0; font-size: 25px; font-weight: 700; line-height: 1.4; letter-spacing: -0.04em; }
       .startup-loader__brand span { color: var(--startup-accent); }
       .startup-loader__message { margin: 10px 0 0; color: var(--startup-muted); font-size: 14px; line-height: 1.7; letter-spacing: 0.01em; }
-      @keyframes startup-orbit { to { transform: rotate(360deg); } }
+      @keyframes startup-orbit {
+        from { transform: rotate(0deg); }
+        to { transform: rotate(360deg); }
+      }
+      @keyframes startup-stretch {
+        /* 虚线周期固定为一圈；收短时尾端追赶前端，二者都向前，跨周期无跳变。 */
+        0% { stroke-dasharray: 12 88; stroke-dashoffset: 0; }
+        50% { stroke-dasharray: 65 35; stroke-dashoffset: 0; }
+        100% { stroke-dasharray: 12 88; stroke-dashoffset: -100; }
+      }
       @media (prefers-reduced-motion: reduce) {
-        .startup-loader__ring { animation: none; }
+        /* 加载状态仍需持续反馈；仅放慢旋转，并覆盖应用 CSS 的全局动画停用规则。 */
+        .startup-loader .startup-loader__ring,
+        .startup-loader .startup-loader__arc {
+          animation-duration: 4s !important;
+          animation-iteration-count: infinite !important;
+        }
       }
     </style>
   </head>
@@ -116,16 +133,13 @@
       <div class="startup-loader" role="status" aria-live="polite" aria-atomic="true">
         <div class="startup-loader__card">
           <div class="startup-loader__dial" aria-hidden="true">
-            <span class="startup-loader__ring"></span>
-            <span class="startup-loader__book">
-              <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
-                <rect x="4" y="3" width="16" height="18" rx="3" />
-                <path d="M8 3v18M15 3v7l2-1.5 2 1.5V3M11 14h5M11 17h3" />
-              </svg>
-            </span>
+            <svg class="startup-loader__ring" viewBox="0 0 112 112" aria-hidden="true">
+              <circle class="startup-loader__arc" cx="56" cy="56" r="54" pathLength="100" transform="rotate(-90 56 56)" />
+            </svg>
+            <img class="startup-loader__logo" src="./favicon.svg" width="80" height="80" alt="" fetchpriority="high" />
           </div>
           <h1 class="startup-loader__brand">Work<span>log</span></h1>
-          <p class="startup-loader__message">正在加载配置…</p>
+          <p class="startup-loader__message">正在加载…</p>
         </div>
       </div>
     </div>

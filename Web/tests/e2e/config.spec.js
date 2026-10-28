@@ -29,6 +29,27 @@ for (const scenario of [
   })
 }
 
+test('启动脚本尚未返回时，HTML 已提前请求主应用 JS 和 CSS', async ({ page }) => {
+  let release
+  const gate = new Promise(resolve => { release = resolve })
+  const appRequested = page.waitForRequest(/\/assets\/main-[^/]+\.js$/)
+  const cssRequested = page.waitForRequest(/\/assets\/main-[^/]+\.css$/)
+  await page.route('**/assets/index-*.js', async route => {
+    await gate
+    await route.continue()
+  })
+  await page.route('**/config.json', route => route.fulfill({ json: {} }))
+  try {
+    await page.goto('/', { waitUntil: 'commit' })
+    await Promise.all([appRequested, cssRequested])
+    await expect(page.getByRole('status')).toContainText('正在加载…')
+    await expect(page.getByRole('textbox', { name: '工作日志内容' })).toHaveCount(0)
+  } finally {
+    release()
+  }
+  await expect(page.getByRole('textbox', { name: '工作日志内容' })).toBeVisible()
+})
+
 test('配置和应用资源并行加载，配置读取完成之前不挂载；合法空JSON使用本地模式', async ({ page }) => {
   const appLoaded = page.waitForEvent('requestfinished', request => /\/assets\/main-[^/]+\.js$/.test(new URL(request.url()).pathname))
   let release
@@ -40,7 +61,7 @@ test('配置和应用资源并行加载，配置读取完成之前不挂载；�
     await route.fulfill({ json: {} })
   })
   await page.goto('/', { waitUntil: 'domcontentloaded' })
-  await expect(page.getByRole('status')).toContainText('正在加载配置…')
+  await expect(page.getByRole('status')).toContainText('正在加载…')
   await expect(page.locator('.startup-loader__ring')).toBeVisible()
   // 配置仍被拦截时，主应用 JS 已下载，不再串行等待配置。
   await appLoaded
@@ -82,7 +103,7 @@ for (const scenario of [
       await page.goto('/', { waitUntil: 'domcontentloaded' })
       const loader = page.getByRole('status')
       await expect(loader).toBeVisible()
-      await expect(loader).toContainText('正在加载配置…')
+      await expect(loader).toContainText('正在加载…')
       await expect(loader).toHaveCSS('background-color', scenario.background)
       const card = page.locator('.startup-loader__card')
       expect(await card.evaluate(el => getComputedStyle(el).boxShadow)).not.toBe('none')
@@ -91,8 +112,48 @@ for (const scenario of [
       expect(bounds.x + bounds.width).toBeLessThanOrEqual(scenario.width - 24)
       expect(Math.abs(bounds.y + bounds.height / 2 - scenario.height / 2)).toBeLessThan(1)
       const ring = page.locator('.startup-loader__ring')
-      await expect(ring).toHaveCSS('animation-name', scenario.reduced ? 'none' : 'startup-orbit')
-      if (!scenario.reduced) await expect(ring).toHaveCSS('animation-iteration-count', 'infinite')
+      await expect(ring).toHaveCSS('animation-name', 'startup-orbit')
+      await expect(ring).toHaveCSS('animation-timing-function', 'ease-out')
+      await expect(ring.locator('circle')).toHaveCount(1)
+      const arc = ring.locator('.startup-loader__arc')
+      await expect(arc).toHaveCSS('fill', 'none')
+      await expect(arc).toHaveCSS('animation-name', 'startup-stretch')
+      await expect(arc).toHaveCSS('animation-duration', scenario.reduced ? '4s' : '1.2s')
+      await expect(arc).toHaveCSS('animation-iteration-count', 'infinite')
+      const samples = await arc.evaluate(el => {
+        const animation = el.getAnimations()[0]
+        const duration = animation.effect.getTiming().duration
+        const previousTime = animation.currentTime
+        animation.pause()
+        const values = [0, 0.5, 0.6, 0.7, 0.8, 0.9, 0.999, 1].map(progress => {
+          animation.currentTime = duration * progress
+          const style = getComputedStyle(el)
+          const [length, gap] = style.strokeDasharray.split(/[,\s]+/).map(parseFloat)
+          const tail = -parseFloat(style.strokeDashoffset)
+          return { length, period: length + gap, tail, head: tail + length }
+        })
+        animation.currentTime = previousTime
+        animation.play()
+        return values
+      })
+      expect([samples[0].length, samples[1].length, samples.at(-1).length]).toEqual([12, 65, 12])
+      for (const sample of samples) expect(sample.period).toBeCloseTo(100, 2)
+      // 收短期间前后端都向前，不依靠外圈旋转掩盖前端回缩。
+      for (let index = 2; index < samples.length - 1; index++) {
+        expect(samples[index].length).toBeLessThan(samples[index - 1].length)
+        expect(samples[index].tail).toBeGreaterThan(samples[index - 1].tail)
+        expect(samples[index].head).toBeGreaterThan(samples[index - 1].head)
+      }
+      // 周期末与下圈起点只相差整圈，避免循环接缝跳动。
+      expect(samples.at(-2).head - 100).toBeCloseTo(samples.at(-1).head, 2)
+      expect(samples.at(-2).tail - 100).toBeCloseTo(samples.at(-1).tail, 2)
+      await expect(ring).toHaveCSS('animation-duration', scenario.reduced ? '4s' : '1.2s')
+      await expect(ring).toHaveCSS('animation-iteration-count', 'infinite')
+      const transform = await ring.evaluate(el => getComputedStyle(el).transform)
+      await expect.poll(() => ring.evaluate(el => getComputedStyle(el).transform)).not.toBe(transform)
+      const logo = page.locator('.startup-loader__logo')
+      await expect(logo).toHaveAttribute('src', './favicon.svg')
+      await expect.poll(() => logo.evaluate(el => el.complete && el.naturalWidth > 0)).toBe(true)
       // 配置与外部样式尚未返回，启动动画仍可正常显示。
       expect(await page.evaluate(() => [...document.styleSheets].some(sheet => sheet.href))).toBe(false)
       await expect(page.getByRole('textbox', { name: '工作日志内容' })).toHaveCount(0)
@@ -104,7 +165,32 @@ for (const scenario of [
   })
 }
 
-test('配置就绪但应用资源未完成时提示准备应用，且不访问业务API', async ({ page }) => {
+test('减少动态效果时，应用全局样式加载后圆环仍持续慢速旋转', async ({ page }) => {
+  await page.emulateMedia({ reducedMotion: 'reduce' })
+  let release
+  const gate = new Promise(resolve => { release = resolve })
+  await page.route('**/config.json', async route => {
+    await gate
+    await route.fulfill({ json: {} })
+  })
+  try {
+    await page.goto('/', { waitUntil: 'domcontentloaded' })
+    await expect.poll(() => page.evaluate(() => [...document.styleSheets].some(sheet => sheet.href))).toBe(true)
+    const ring = page.locator('.startup-loader__ring')
+    await expect(ring).toHaveCSS('animation-duration', '4s')
+    await expect(ring).toHaveCSS('animation-iteration-count', 'infinite')
+    await expect(ring.locator('.startup-loader__arc')).toHaveCSS('animation-duration', '4s')
+    await expect(ring.locator('.startup-loader__arc')).toHaveCSS('animation-iteration-count', 'infinite')
+    const transform = await ring.evaluate(el => getComputedStyle(el).transform)
+    await expect.poll(() => ring.evaluate(el => getComputedStyle(el).transform)).not.toBe(transform)
+  } finally {
+    release()
+  }
+  await expect(page.locator('.startup-loader')).toHaveCount(0)
+})
+
+test('配置就绪但应用资源未完成时保持统一动画，且不访问业务API', async ({ page }) => {
+  const configLoaded = page.waitForEvent('requestfinished', request => new URL(request.url()).pathname === '/config.json')
   let release
   const gate = new Promise(resolve => { release = resolve })
   const apiRequests = []
@@ -116,7 +202,8 @@ test('配置就绪但应用资源未完成时提示准备应用，且不访问�
   })
   try {
     await page.goto('/', { waitUntil: 'domcontentloaded' })
-    await expect(page.getByRole('status')).toContainText('正在准备应用…')
+    await configLoaded
+    await expect(page.getByRole('status')).toContainText('正在加载…')
     await expect(page.getByRole('textbox', { name: '工作日志内容' })).toHaveCount(0)
     expect(apiRequests).toEqual([])
   } finally {
@@ -158,7 +245,7 @@ test('配置请求超时显示启动错误，不挂载', async ({ page }) => {
   await page.clock.install()
   await page.route('**/config.json', () => {})
   await page.goto('/', { waitUntil: 'domcontentloaded' })
-  await expect(page.getByRole('status')).toContainText('正在加载配置…')
+  await expect(page.getByRole('status')).toContainText('正在加载…')
   await page.clock.fastForward(6000)
   await expect(page.getByRole('alert')).toContainText('超时')
   await expect(page.locator('.startup-loader')).toHaveCount(0)

@@ -5,12 +5,52 @@ import { fileURLToPath } from 'node:url'
 import { createServer as createHTTPServer } from 'node:http'
 import { createServer } from 'vite'
 import viteConfig from '../vite.config.js'
+import { startupPreloads } from '../startupPreloads.js'
 import { getBackendURL } from '../src/api/client.js'
 import { loadRuntimeConfig, startApplication, validateRuntimeConfig } from '../src/runtimeConfig.js'
 
 const configFile = fileURLToPath(new URL('../vite.config.js', import.meta.url))
 const configURL = new URL('https://example.test/worklog/config.json')
 const response = (value, status = 200) => ({ ok: status >= 200 && status < 300, status, json: async () => value })
+
+test('启动预加载覆盖 main 的静态图和 CSS，去重但不加载懒加载图或阻塞样式', () => {
+  const plugin = startupPreloads()
+  assert.equal(plugin.transformIndexHtml.order, 'post')
+  const mainId = fileURLToPath(new URL('../src/main.js', import.meta.url))
+  const chunk = (fileName, imports = [], css = []) => ({ type: 'chunk', fileName, imports,
+    viteMetadata: { importedCss: new Set(css) } })
+  const bundle = {
+    'assets/main.js': { ...chunk('assets/main.js', ['assets/vue.js', 'assets/shared.js'], ['assets/main.css']),
+      facadeModuleId: mainId, dynamicImports: ['assets/monaco.js'] },
+    'assets/vue.js': chunk('assets/vue.js', ['assets/shared.js'], ['assets/shared.css']),
+    'assets/shared.js': chunk('assets/shared.js', ['assets/vue.js'], ['assets/main.css']),
+    'assets/monaco.js': chunk('assets/monaco.js', [], ['assets/monaco.css']),
+  }
+  for (const base of ['./', '/worklog/', 'https://cdn.example.test/worklog/']) {
+    plugin.configResolved({ base })
+    const links = plugin.transformIndexHtml.handler('', { bundle })
+    assert.deepEqual(links.map(link => link.attrs), [
+      ...['assets/main.js', 'assets/vue.js', 'assets/shared.js'].map(name => ({
+        rel: 'modulepreload', crossorigin: '', href: `${base}${name}`,
+      })),
+      ...['assets/main.css', 'assets/shared.css'].map(name => ({
+        rel: 'preload', as: 'style', crossorigin: '', href: `${base}${name}`,
+      })),
+    ])
+    assert.ok(links.every(link => link.tag === 'link' && link.injectTo === 'head'))
+  }
+  assert.throws(() => plugin.transformIndexHtml.handler('', { bundle: {} }), /missing main.js/)
+})
+
+test('开发模式预加载 main 模块；默认相对 base 与子目录 base 均正确', () => {
+  const plugin = startupPreloads()
+  for (const [base, href] of [['./', '/src/main.js'], ['/worklog/', '/worklog/src/main.js']]) {
+    plugin.configResolved({ base })
+    assert.deepEqual(plugin.transformIndexHtml.handler('', { server: {} }), [
+      { tag: 'link', attrs: { rel: 'modulepreload', crossorigin: '', href }, injectTo: 'head' },
+    ])
+  }
+})
 
 function restoreConfig(t) {
   const original = Object.getOwnPropertyDescriptor(globalThis, 'WORKLOG_CONFIG')

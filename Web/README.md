@@ -97,8 +97,11 @@ Go 部署固定同源 `/api` 并自动传入业务时区，子目录代理约定
 
 启动入口相对于页面 URL 请求 `./config.json`（支持 `/worklog/` 子目录），
 使用同源凭证、禁用缓存，并设置 5 秒超时；同时并行加载应用 JS/CSS，减少串行等待。
+HTML 只声明轻量 bootstrap 模块入口，应用仍通过动态 import 加载；不要添加第二个静态 main 入口（即使带 async），以免 Vite 合并入口后让应用依赖拖延配置请求和首屏绘制。
+`startupPreloads.js` 在构建后的 HTML 中为 main 及其静态依赖注入 `modulepreload`，为对应 CSS 注入 `preload as="style"`，让浏览器在 bootstrap 执行前就能发现资源；不会预加载 Monaco 等动态功能。
+CSS 提示不是 `stylesheet`，不会阻塞加载界面的首次绘制；后续由 Vite 动态加载器应用样式。预加载使用与 Vite 样式链接一致的匿名 `crossorigin`，以便复用请求。开发模式仅预加载 `/src/main.js`。
 应用模块只导出挂载函数，只有配置读取、校验及资源加载都完成后才挂载，避免首批业务请求使用错误地址。
-配置返回前显示“正在加载配置…”，返回后若资源仍未就绪则显示“正在准备应用…”。
+启动过程统一显示“正在加载…”，不切换配置／资源阶段文案；配置失败不等待应用资源就显示错误，动态 import 或样式加载失败也会进入启动错误处理。
 `config.json` 是必需发布文件，不存在读取失败回退：
 
 - 文件缺失（404/410）、网络失败、超时、其他 HTTP 错误（包括 401/403/5xx）、JSON 损坏、非对象、未知字段、非法 URL 或时区：显示启动错误，不挂载应用，不发送业务 API 请求，不写本地业务数据。
@@ -184,6 +187,7 @@ WORKLOG_TEST_API_URL=http://127.0.0.1:22450/api npm run test:backend
 ## 代码导航与 review
 
 - `src/bootstrap.js`、`src/runtimeConfig.js`、`src/main.js`：并行读取公开 JSON 与加载应用资源；配置校验及资源加载完成后才显式挂载，任一路失败均停止启动。
+- `startupPreloads.js`、`vite.config.js`：提前发现应用静态 JS/CSS，保留轻量 bootstrap 和非阻塞首屏；构建插件依赖 Vite 的 chunk CSS 元数据，升级 Vite 后需检查生成的 HTML 预加载链接与浏览器请求复用。
 - `src/api/client.js`：运行时地址校验、统一 HTTP、错误及超时处理。
 - `src/api/index.js`：工作台的本地／后端适配及静态日历 JSON 加载。
 - `src/api/worklog.js`：日志读写、显式版本参数及日期标记，不依赖静态文件。
