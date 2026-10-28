@@ -213,8 +213,7 @@ main { max-width: 1540px; padding: 32px 32px 48px; margin: 0 auto; }
 .color-options .el-radio-button .el-radio-button__original-radio:focus-visible + .el-radio-button__inner { outline: none; box-shadow: var(--shadow-focus-visible) !important; }
 .color-swatch { display: inline-block; flex-shrink: 0; width: 16px; height: 16px; border: 1px solid var(--border); border-radius: 4px; }
 .project-help { color: var(--text-secondary); font-size: 13px; margin-bottom: 16px; }
-.project-transfer-actions { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 12px; }
-.project-transfer-actions .el-button + .el-button, .project-edit-row .el-button + .el-button { margin-left: 0; }
+.project-edit-row .el-button + .el-button { margin-left: 0; }
 .project-edit-row > .el-input { min-width: 0; flex: 1; }
 .project-add, .project-edit-row { display: flex; align-items: center; gap: 8px; }
 .project-add { margin-bottom: 16px; }
@@ -224,8 +223,7 @@ main { max-width: 1540px; padding: 32px 32px 48px; margin: 0 auto; }
 .project-status-tabs .project-tab-label { display: inline-flex; align-items: center; justify-content: center; padding: 12px 24px; }
 .project-row-actions { display: flex; align-items: center; flex-shrink: 0; gap: 0; margin-left: 8px; }
 .project-row-actions .el-button { margin: 0; padding: 6px; }
-.project-dialog-actions { justify-content: flex-start; }
-.project-dialog-actions > .el-button:first-child { margin-right: auto; }
+.project-dialog-actions { justify-content: flex-start; gap: 8px; }
 .project-dialog-actions > .el-button + .el-button { margin-left: 0; }
 .project-drag-handle { display: inline-flex; align-items: center; justify-content: center; width: 28px; height: 32px; flex-shrink: 0; border: 0; border-radius: 4px; background: transparent; color: var(--text-secondary); cursor: grab; font-size: 22px; box-shadow: none; text-shadow: none; transition: color 150ms ease; }
 .project-drag-handle:hover { color: var(--accent); }

@@ -127,7 +127,7 @@ async function uploadProjects(event) {
   event.target.value = ''
   if (!file || transferringProjects.value || persisting.value) return
   try {
-    await ElMessageBox.confirm('导入会追加项目和关联任务，同名项目自动重命名，不会覆盖已有数据。当前项目管理中未保存的修改将被丢弃。是否继续？', '导入项目', { confirmButtonText: '导入', cancelButtonText: '取消' })
+    await ElMessageBox.confirm('导入会追加项目和关联任务，同名项目自动重命名，不会覆盖已有数据。是否继续？', '导入项目', { confirmButtonText: '导入', cancelButtonText: '取消' })
   } catch { return }
   if (persisting.value || transferringProjects.value) return
   transferringProjects.value = true
@@ -154,6 +154,7 @@ const visibleDraftProjects = computed({
 function toggleProjectArchive(project) {
   resetProjectDrag()
   project.archived = !project.archived
+  saveProjects()
 }
 const newProjectName = ref('')
 const {
@@ -272,9 +273,9 @@ async function openProjects() {
     projectDialog.value = true
   } catch (e) { ElMessage.error(`读取项目失败：${e.message}`) }
 }
-function addDraftProject() {
+async function addDraftProject() {
   const name = newProjectName.value.trim()
-  if (!name) return ElMessage.warning('请输入项目名称')
+  if (!name) return
   const id = allocateID()
   if (!id) return
   const projects = [...draftProjects.value, { id, name }]
@@ -283,6 +284,7 @@ function addDraftProject() {
   draftProjects.value = projects
   showArchivedProjects.value = false
   newProjectName.value = ''
+  await saveProjects()
 }
 async function deleteDraftProject(project) {
   if (persisting.value || transferringProjects.value) return
@@ -314,21 +316,38 @@ async function deleteDraftProject(project) {
   resetProjectDrag()
   draftProjects.value = draftProjects.value.filter(item => item.id !== project.id)
 }
-async function saveProjects() {
-  if (persisting.value || transferringProjects.value) return
-  if (newProjectName.value.trim()) addDraftProject()
-  if (newProjectName.value.trim()) return
-  const message = validateProjects(draftProjects.value)
-  if (message) return ElMessage.warning(message)
-  persisting.value = true
-  try {
-    const saved = await saveDashboard(replaceProjects(projectSnapshot.value, draftProjects.value))
-    data.value = visibleDashboard(saved)
-    committed = JSON.parse(JSON.stringify(data.value))
-    if (selectedProject.value !== ALL_PROJECTS && selectedProject.value !== '' && !data.value.projects.some(project => project.id === selectedProject.value)) selectedProject.value = ALL_PROJECTS
-    projectDialog.value = false
-  } catch (e) { ElMessage.error(`保存失败：${e.message}`) }
-  finally { persisting.value = false }
+let projectSavePromise = null
+let projectSavePending = false
+function saveProjects() {
+  if (projectSavePromise) {
+    projectSavePending = true
+    return projectSavePromise
+  }
+  if (persisting.value || transferringProjects.value || !projectSnapshot.value) return
+  projectSavePromise = (async () => {
+    do {
+      projectSavePending = false
+      const projects = draftProjects.value.map(project => ({ ...project, name: project.name.trim() }))
+      if (JSON.stringify(projects) === JSON.stringify(projectSnapshot.value.projects)) continue
+      const message = validateProjects(projects)
+      if (message) {
+        ElMessage.warning(message)
+        return
+      }
+      persisting.value = true
+      try {
+        const saved = await saveDashboard(replaceProjects(projectSnapshot.value, projects))
+        projectSnapshot.value = saved
+        data.value = visibleDashboard(saved)
+        committed = JSON.parse(JSON.stringify(data.value))
+        if (selectedProject.value !== ALL_PROJECTS && selectedProject.value !== '' && !data.value.projects.some(project => project.id === selectedProject.value)) selectedProject.value = ALL_PROJECTS
+      } catch (e) {
+        ElMessage.error(`保存失败：${e.message}`)
+        return
+      } finally { persisting.value = false }
+    } while (projectSavePending)
+  })().finally(() => { projectSavePromise = null })
+  return projectSavePromise
 }
 async function addTodo() {
   if (persisting.value || !newTodo.value.trim()) return
@@ -485,21 +504,17 @@ onMounted(load)
       </ElDialog>
 
       <ElDialog v-model="projectDialog" title="项目管理" width="min(620px, 92vw)" @closed="resetProjectDrag">
-        <p class="project-help">拖动排序手柄调整项目顺序。归档后项目及其任务不再展示，可在“已归档”中恢复。删除项目需输入项目名称确认，确认后立即删除项目及其所有任务，无法恢复，取消项目管理也不会撤销删除。其他修改点击保存后生效。导出仅包含已保存的项目、关联任务和分类，不包含未分配任务、待办或工作日志。</p>
-        <div v-if="hasBackend" class="project-transfer-actions">
-          <ElButton v-if="hasBackend" :disabled="transferringProjects || persisting" @click="projectImportInput?.click()"><RiDownload2Line :size="17" aria-hidden="true" />导入项目</ElButton>
-          <input v-if="hasBackend" ref="projectImportInput" type="file" accept=".zip,application/zip" aria-label="选择项目 ZIP 文件" hidden @change="uploadProjects" />
-        </div>
-        <ElForm class="project-form" @submit.prevent="saveProjects">
-          <div class="project-add"><ElInput v-model="newProjectName" placeholder="新项目名称" aria-label="新项目名称" maxlength="40" @keydown.enter.prevent="addDraftProject" /><ElButton @click="addDraftProject"><Icon name="Add" :size="16" />添加</ElButton></div>
+        <p class="project-help">拖动排序手柄调整项目顺序。归档后项目及其任务不再展示，可在“已归档”中恢复。新增和修改名称在失去焦点后自动保存，排序在操作结束后自动保存，归档和恢复即时生效。删除项目需输入项目名称确认，确认后立即删除项目及其所有任务，无法恢复。导出仅包含已保存的项目、关联任务和分类，不包含未分配任务、待办或工作日志。</p>
+        <ElForm class="project-form" @submit.prevent="addDraftProject">
+          <div class="project-add"><ElInput v-model="newProjectName" placeholder="新项目名称" aria-label="新项目名称" maxlength="40" @blur="addDraftProject" @keydown.enter.prevent="addDraftProject" /><ElButton @click="addDraftProject"><Icon name="Add" :size="16" />添加</ElButton></div>
           <ElTabs class="project-status-tabs" :model-value="showArchivedProjects ? 'archived' : 'active'" @tab-change="showArchivedProjects = $event === 'archived'; resetProjectDrag()">
             <ElTabPane label="进行中" name="active"><template #label><span class="project-tab-label">进行中</span></template></ElTabPane>
             <ElTabPane label="已归档" name="archived"><template #label><span class="project-tab-label">已归档</span></template></ElTabPane>
           </ElTabs>
-          <div class="project-edit-list project-sort-list" @dragover="previewProjectDrop" @dragleave="leaveProjectList" @drop.prevent.stop="dropProject">
+          <div class="project-edit-list project-sort-list" @dragover="previewProjectDrop" @dragleave="leaveProjectList" @drop.prevent.stop="dropProject($event); saveProjects()">
             <div v-for="(project, index) in visibleDraftProjects" :key="project.id" class="project-edit-row project-sort-row" :class="{ 'is-dragging': draggedProject === project.id, 'drop-before': projectDropIndex === index, 'drop-after': projectDropIndex === visibleDraftProjects.length && index === visibleDraftProjects.length - 1 }">
-              <button type="button" class="project-drag-handle" draggable="true" :aria-label="`拖动排序：${project.name}；方向键上下移动`" title="拖动排序，也可使用上下方向键" @dragstart="startProjectDrag($event, project.id)" @dragend="resetProjectDrag" @keydown.up.prevent="moveProject(project.id, -1)" @keydown.down.prevent="moveProject(project.id, 1)">⠿</button>
-              <ElInput v-model="project.name" :aria-label="`项目名称：${project.name}`" maxlength="40" />
+              <button type="button" class="project-drag-handle" draggable="true" :aria-label="`拖动排序：${project.name}；方向键上下移动`" title="拖动排序，也可使用上下方向键" @dragstart="startProjectDrag($event, project.id)" @dragend="resetProjectDrag" @keydown.up.prevent="moveProject(project.id, -1)" @keydown.down.prevent="moveProject(project.id, 1)" @keyup.up="saveProjects" @keyup.down="saveProjects" @blur="saveProjects">⠿</button>
+              <ElInput v-model="project.name" :aria-label="`项目名称：${project.name}`" maxlength="40" @blur="saveProjects" @keydown.enter.prevent="saveProjects" />
               <div class="project-row-actions">
                 <ElButton text :aria-label="`${project.archived ? '取消归档' : '归档'}项目：${project.name}`" :title="project.archived ? '取消归档' : '归档'" @click="toggleProjectArchive(project)"><RiInboxUnarchiveLine v-if="project.archived" size="17" aria-hidden="true" /><RiInboxArchiveLine v-else size="17" aria-hidden="true" /></ElButton>
                 <ElButton text :disabled="transferringProjects || persisting || !projectSnapshot.projects.some(item => item.id === project.id)" :aria-label="`导出项目：${project.name}`" title="导出项目" @click="downloadProject(project.id)"><RiUpload2Line size="17" aria-hidden="true" /></ElButton>
@@ -510,8 +525,8 @@ onMounted(load)
           </div>
           <div class="dialog-actions project-dialog-actions">
             <ElButton :disabled="transferringProjects || persisting" @click="downloadProject()"><RiUpload2Line :size="17" aria-hidden="true" />全部导出</ElButton>
-            <ElButton class="cancel-button" @click="projectDialog = false">取消</ElButton>
-            <ElButton type="primary" native-type="submit">保存</ElButton>
+            <ElButton v-if="hasBackend" :disabled="transferringProjects || persisting" @click="projectImportInput?.click()"><RiDownload2Line :size="17" aria-hidden="true" />导入项目</ElButton>
+            <input v-if="hasBackend" ref="projectImportInput" type="file" accept=".zip,application/zip" aria-label="选择项目 ZIP 文件" hidden @change="uploadProjects" />
           </div>
         </ElForm>
       </ElDialog>

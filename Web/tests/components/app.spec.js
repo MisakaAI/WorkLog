@@ -71,6 +71,7 @@ it('项目管理默认未归档，可归档、查看归档、取消归档及删�
   expect(wrapper.findAll('.project-row-actions button').map(button => button.attributes('title'))).toEqual(['归档', '导出项目', '删除项目'])
   expect(wrapper.find('.project-dialog-actions > button').text()).toBe('全部导出')
   await wrapper.find('button[aria-label="归档项目：当前项目"]').trigger('click')
+  await flushPromises()
   expect(wrapper.find('input[aria-label="项目名称：当前项目"]').exists()).toBe(false)
   expect(wrapper.findComponent({ name: 'ElTabs' }).props('modelValue')).toBe('active')
   wrapper.findComponent({ name: 'ElTabs' }).vm.$emit('tab-change', 'archived')
@@ -78,14 +79,14 @@ it('项目管理默认未归档，可归档、查看归档、取消归档及删�
   expect(wrapper.findAll('.project-form .project-edit-row')).toHaveLength(2)
   expect(wrapper.find('button[aria-label="删除项目：旧项目"]').exists()).toBe(true)
   await wrapper.find('button[aria-label="取消归档项目：当前项目"]').trigger('click')
+  await flushPromises()
   expect(wrapper.find('input[aria-label="项目名称：当前项目"]').exists()).toBe(false)
   ElMessageBox.prompt.mockResolvedValueOnce({ value: '旧项目' })
   await wrapper.find('button[aria-label="删除项目：旧项目"]').trigger('click')
   await flushPromises()
-  expect(saveDashboard).toHaveBeenCalledTimes(1)
-  expect(saveDashboard).toHaveBeenLastCalledWith(expect.objectContaining({ revision: 0, includeArchived: true, projects: [active], tasks: [] }))
-  await wrapper.find('form.project-form').trigger('submit'); await flushPromises()
-  expect(saveDashboard).toHaveBeenLastCalledWith(expect.objectContaining({ revision: 1, includeArchived: true, projects: [expect.objectContaining({ id: 'p', archived: false })] }))
+  expect(saveDashboard).toHaveBeenCalledTimes(3)
+  expect(saveDashboard).toHaveBeenLastCalledWith(expect.objectContaining({ revision: 2, includeArchived: true, projects: [{ ...active, archived: false }], tasks: [] }))
+  expect(wrapper.findAll('.project-dialog-actions button').map(button => button.text())).toEqual(['全部导出'])
 })
 
 it('删除项目要求前端精确校验项目名称，取消或名称不匹配均不删除', async () => {
@@ -129,11 +130,11 @@ it('确认后立即删除所有状态的关联任务，保留其他项目和未�
   expect(saveDashboard).toHaveBeenCalledTimes(1)
   expect(saveDashboard).toHaveBeenLastCalledWith(expect.objectContaining({ projects: [projects[1]], tasks: tasks.slice(3) }))
   expect(wrapper.find('input[aria-label="项目名称：尚未保存的新名称"]').exists()).toBe(true)
-  await wrapper.find('form.project-form').trigger('submit'); await flushPromises()
+  await wrapper.find('input[aria-label="项目名称：尚未保存的新名称"]').trigger('blur'); await flushPromises()
   expect(saveDashboard).toHaveBeenLastCalledWith(expect.objectContaining({ revision: 1, projects: [{ id: 'q', name: '尚未保存的新名称' }], tasks: tasks.slice(3) }))
 })
 
-it('确认删除后取消项目管理不会撤销删除，重新打开项目不再出现', async () => {
+it('确认删除后重新打开项目管理不再出现已删除项目', async () => {
   getDashboard.mockResolvedValue({ ...emptyDashboard(), revision: 0, projects: [{ id: 'p', name: '项目' }] })
   open(); await flushPromises()
   const manage = () => wrapper.findAll('button').find(button => button.text() === '项目管理').trigger('click')
@@ -142,7 +143,6 @@ it('确认删除后取消项目管理不会撤销删除，重新打开项目不�
   await wrapper.find('button[title="删除项目"]').trigger('click'); await flushPromises()
   expect(saveDashboard).toHaveBeenCalledTimes(1)
   getDashboard.mockResolvedValue(await saveDashboard.mock.results[0].value)
-  await wrapper.find('.project-dialog-actions .cancel-button').trigger('click')
   await manage(); await flushPromises()
   expect(wrapper.find('button[aria-label="删除项目：项目"]').exists()).toBe(false)
   expect(saveDashboard).toHaveBeenCalledTimes(1)
@@ -162,15 +162,17 @@ it('删除失败保留项目和草稿，可重试且不会提前更新快照版�
   expect(saveDashboard).toHaveBeenNthCalledWith(2, expect.objectContaining({ revision: 4, projects: [], tasks: [] }))
 })
 
-it('删除尚未保存的新项目仅移除草稿，不提交其他修改', async () => {
+it('新增项目自动保存，随后删除使用更新后的版本', async () => {
   open(); await flushPromises()
   await wrapper.findAll('button').find(button => button.text() === '项目管理').trigger('click'); await flushPromises()
   await wrapper.find('input[aria-label="新项目名称"]').setValue('新项目')
-  await wrapper.find('.project-add button').trigger('click')
+  await wrapper.find('.project-add button').trigger('click'); await flushPromises()
+  expect(saveDashboard).toHaveBeenCalledTimes(1)
   ElMessageBox.prompt.mockResolvedValueOnce({ value: '新项目' })
   await wrapper.find('button[title="删除项目"]').trigger('click'); await flushPromises()
   expect(wrapper.find('button[title="删除项目"]').exists()).toBe(false)
-  expect(saveDashboard).not.toHaveBeenCalled()
+  expect(saveDashboard).toHaveBeenCalledTimes(2)
+  expect(saveDashboard).toHaveBeenLastCalledWith(expect.objectContaining({ revision: 1, projects: [] }))
 })
 
 it('删除请求未完成时阻止重复删除和保存，完成后立即更新工作台', async () => {
@@ -190,6 +192,60 @@ it('删除请求未完成时阻止重复删除和保存，完成后立即更新�
   await wrapper.find('input[aria-label="新待办"]').setValue('后续待办')
   await wrapper.find('form.add-todo').trigger('submit'); await flushPromises()
   expect(saveDashboard).toHaveBeenLastCalledWith(expect.objectContaining({ revision: 1, projects: [] }))
+})
+
+it('项目新增失焦保存、改名失焦保存，键盘排序结束后保存完整快照', async () => {
+  const projects = [{ id: 'p', name: '项目一' }, { id: 'q', name: '项目二', archived: true }]
+  getDashboard.mockResolvedValue({ ...emptyDashboard(), revision: 0, includeArchived: true, projects })
+  open(); await flushPromises()
+  await wrapper.findAll('button').find(button => button.text() === '项目管理').trigger('click'); await flushPromises()
+  const input = wrapper.find('input[aria-label="新项目名称"]')
+  await input.setValue('新项目')
+  expect(saveDashboard).not.toHaveBeenCalled()
+  await input.trigger('blur'); await flushPromises()
+  expect(saveDashboard).toHaveBeenCalledTimes(1)
+  await wrapper.find('.project-add button').trigger('click'); await flushPromises()
+  expect(saveDashboard).toHaveBeenCalledTimes(1)
+  const name = wrapper.find('input[aria-label="项目名称：项目一"]')
+  await name.setValue('新名称')
+  expect(saveDashboard).toHaveBeenCalledTimes(1)
+  await name.trigger('blur'); await flushPromises()
+  expect(saveDashboard).toHaveBeenLastCalledWith(expect.objectContaining({ revision: 1, projects: [
+    { id: 'p', name: '新名称' }, projects[1], expect.objectContaining({ name: '新项目' }),
+  ] }))
+  const handle = wrapper.find('.project-drag-handle')
+  await handle.trigger('keydown', { key: 'ArrowDown' })
+  expect(saveDashboard).toHaveBeenCalledTimes(2)
+  await handle.trigger('keyup', { key: 'ArrowDown' }); await flushPromises()
+  expect(saveDashboard).toHaveBeenLastCalledWith(expect.objectContaining({ revision: 2, projects: [
+    expect.objectContaining({ name: '新项目' }), projects[1], { id: 'p', name: '新名称' },
+  ] }))
+})
+
+it('项目保存期间的后续修改串行保存，失败保留输入可失焦重试', async () => {
+  getDashboard.mockResolvedValue({ ...emptyDashboard(), revision: 0, projects: [{ id: 'p', name: '项目' }] })
+  let finish
+  saveDashboard.mockImplementationOnce(data => new Promise(resolve => { finish = () => resolve({ ...data, revision: 1 }) }))
+  open(); await flushPromises()
+  await wrapper.findAll('button').find(button => button.text() === '项目管理').trigger('click'); await flushPromises()
+  const input = wrapper.find('input[aria-label="项目名称：项目"]')
+  await input.setValue('第一次'); await input.trigger('blur')
+  await input.setValue('第二次'); await input.trigger('blur')
+  expect(saveDashboard).toHaveBeenCalledTimes(1)
+  finish(); await flushPromises()
+  expect(saveDashboard).toHaveBeenLastCalledWith(expect.objectContaining({ revision: 1, projects: [{ id: 'p', name: '第二次' }] }))
+  saveDashboard.mockRejectedValueOnce(new Error('网络错误'))
+  await input.setValue('重试'); await input.trigger('blur'); await flushPromises()
+  expect(ElMessage.error).toHaveBeenCalledWith('保存失败：网络错误')
+  expect(input.element.value).toBe('重试')
+  await input.trigger('blur'); await flushPromises()
+  expect(saveDashboard).toHaveBeenLastCalledWith(expect.objectContaining({ revision: 2, projects: [{ id: 'p', name: '重试' }] }))
+})
+
+it('配置后端时导入项目紧邻全部导出，移除取消和保存按钮', async () => {
+  globalThis.WORKLOG_CONFIG.apiBaseUrl = '/api'
+  open(); await flushPromises()
+  expect(wrapper.findAll('.project-dialog-actions button').map(button => button.text())).toEqual(['全部导出', '导入项目'])
 })
 
 it('工作台加载失败后真实点击重试恢复，不渲染空工作台代替失败', async () => {
