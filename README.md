@@ -25,7 +25,8 @@ sudo bash ./install.sh  # 安装系统服务
 # 或 bash ./install.sh，以当前用户安装 systemd 用户服务
 ```
 
-默认访问 **http://127.0.0.1:12450**。用户服务如需开机运行且退出登录后保持运行，需管理员执行 `sudo loginctl enable-linger 用户名`。详细安装、配置、升级与维护见[部署文档](docs/DEPLOYMENT.md)。
+默认访问 **http://127.0.0.1:12450**。用户服务如需开机运行且退出登录后保持运行，需管理员执行 `sudo loginctl enable-linger 用户名`。
+详细安装、配置、升级与维护见[部署文档](docs/DEPLOYMENT.md)。
 
 ### Windows
 

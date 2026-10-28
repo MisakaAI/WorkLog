@@ -39,7 +39,8 @@ for arch in amd64 arm64; do
     printf '%s\n' "$arch" > "$package/ARCH"
     cp "$ROOT"/docs/*.md "$ROOT/docs/worklog.service" "$package/docs/"
     cp "$ROOT/scripts/install-linux.sh" "$package/install.sh"
-    chmod 755 "$package/install.sh" "$package/bin/worklog"
+    cp "$ROOT/scripts/uninstall-linux.sh" "$package/uninstall.sh"
+    chmod 755 "$package/install.sh" "$package/uninstall.sh" "$package/bin/worklog"
     # Compress to a temporary file first so failed builds do not publish partial archives.
     tar -C "$STAGE" -cf - "$name" | zstd -T0 -10 -o "$STAGE/$name.tar.zst"
     mv -f -- "$STAGE/$name.tar.zst" "$ROOT/bin/$name.tar.zst"
