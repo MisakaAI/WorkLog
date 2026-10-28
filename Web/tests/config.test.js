@@ -35,10 +35,10 @@ test('发布配置仅为 JSON，客户端只使用内部运行时载体，默认
   assert.doesNotMatch(client, /import\.meta\.env|process\.env/)
 })
 
-test('开发固定代理 Go；build 和 preview 不启用开发配置或代理', () => {
+test('开发模式默认本地运行且不代理配置；build 和 preview 不启用开发代理', () => {
   const dev = viteConfig({ command: 'serve', mode: 'development', isPreview: false })
   assert.equal(dev.server.proxy['/api'].target, 'http://127.0.0.1:12450')
-  assert.equal(dev.server.proxy['/config.json'].target, 'http://127.0.0.1:12450')
+  assert.equal(dev.server.proxy['/config.json'], undefined)
   for (const options of [
     { command: 'build', mode: 'production' },
     { command: 'build', mode: 'development' },

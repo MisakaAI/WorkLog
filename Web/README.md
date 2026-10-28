@@ -73,11 +73,9 @@ python3 ico.py
 
 仓库根目录已提供可运行的 Go / SQLite / PostgreSQL 后端和 MCP Server，配置、认证、备份及部署见 [后端 README](../README.md)。  
 构建本前端后在根目录启动 Go 程序，即可通过 `http://127.0.0.1:12450` 使用同源 `/api`；Go 提供的 `config.json` 会自动选择真实后端。
-开发时先在仓库根目录运行后端，再在 `Web/` 中执行 `npm run dev`，无需环境变量。
-仅 Vite 开发服务器将 `/config.json` 和 `/api` 一并代理到 `http://127.0.0.1:12450`，
-直接使用 Go 从服务端 JSON 配置派生的同源 API 地址和业务时区，不维护另一份开发业务配置。
-开发后端未启动时会显示启动配置错误并停止挂载，不会自动降级本地模式。
-开发代理不写入 `public/` 或 `dist/`，`npm run build` 与 `npm run preview` 仍使用发布的 `config.json`，默认本地模式。
+在 `Web/` 中执行 `npm run dev` 即可无后端运行：Vite 从 `public/config.json` 提供 `{}` 配置，数据保存在浏览器中。
+开发服务器仅保留 `/api` 代理供后端联调使用；如需后端模式，应将 `public/config.json` 的 `apiBaseUrl` 配置为 `/api` 并启动 Go 后端。
+`npm run build` 与 `npm run preview` 同样使用发布的 `config.json`，默认本地模式。
 需要验证纯本地模式时使用构建后的 preview。
 
 **独立静态部署配置后端：** 编辑 `dist/config.json` 中的 **API 基础 URL（包含 `/api` 等前缀）**，无需重新构建。

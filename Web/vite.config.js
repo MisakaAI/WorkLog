@@ -17,12 +17,12 @@ function monacoHTMLWorkerBridge() {
 // https://vite.dev/config/
 export default defineConfig(({ command, isPreview }) => ({
   base: './',
-  // 开发直接使用 Go 派生的公开 JSON（含业务时区），无需环境变量。
-  // preview 也不能继承开发代理；独立静态发布始终默认本地模式。
+  // 开发模式默认纯前端运行：config.json 由 Vite 从 public/ 提供（{}），数据保存到浏览器。
+  // 仅显式配置了后端地址时才会请求后端；API 代理可供开发联调使用。
+  // preview 不继承开发代理，独立静态发布默认本地模式。
   server: {
     proxy: command === 'serve' && !isPreview ? {
       '/api': { target: 'http://127.0.0.1:12450', changeOrigin: false },
-      '/config.json': { target: 'http://127.0.0.1:12450', changeOrigin: false },
     } : undefined,
   },
   plugins: [vue(), { ...monacoHTMLWorkerBridge(), enforce: 'pre' }],
