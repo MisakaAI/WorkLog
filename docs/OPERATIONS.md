@@ -64,6 +64,46 @@ CLI 使用 `VACUUM INTO` 创建一致性快照，并检查 `integrity_check`／`
 
 脚本不在恢复流程中使用，也不会启动原本已停止的服务。自动重新启动仅是尽力而为（断电或强制终止无法保证）；执行后检查 `sudo systemctl status worklog.service --no-pager`，启动失败时查看 `sudo journalctl -u worklog.service -n 100 --no-pager`。备份只是时间点快照，不包含后续提交。
 
+### 可选：cron 自动备份
+
+复用上方停服备份脚本，不另写一套逻辑：将 `sudo bash <<'BASH'` 与结束行 `BASH` **之间的内容（不含这两行外层包装）**保存到 `/usr/local/sbin/worklog-backup.sh`，并在文件第一行加上 `#!/bin/bash`。使用 `sudoedit` 创建或编辑；若文件已存在，先检查内容再合并，不要用 `install /dev/null` 清空已有脚本：
+
+```bash
+sudoedit /usr/local/sbin/worklog-backup.sh
+sudo chown root:root /usr/local/sbin/worklog-backup.sh
+sudo chmod 0700 /usr/local/sbin/worklog-backup.sh
+```
+
+脚本默认 `compress_zstd=1`，须提前安装 `zstd`，或在脚本中改为 `0`。cron 以 root 停启系统服务，但脚本中的备份命令仍保留 `sudo -u worklog`。先检查语法，再手动执行验证（**会短暂停服**）；手动执行也使用同一把锁：
+
+```bash
+sudo /bin/bash -n /usr/local/sbin/worklog-backup.sh
+# 仅在语法检查通过后执行：
+sudo env PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin /usr/bin/flock -n /run/lock/worklog-backup.lock /bin/bash /usr/local/sbin/worklog-backup.sh
+```
+
+确认备份结果和服务状态正常后再启用定时任务。同日目标 `.db` 或 `.db.zst` 已存在会拒绝执行，**不要删除已有备份来绕过检查**；原服务已停止时脚本也会退出，不会将其启动。
+
+先预建 root 私有日志（已有日志只调整权限，不清空），再用 `sudo crontab -e` 编辑 **root 的 crontab**：
+
+```bash
+sudo sh -c 'umask 077; touch /var/log/worklog-backup.log'
+sudo chown root:root /var/log/worklog-backup.log
+sudo chmod 0600 /var/log/worklog-backup.log
+sudo crontab -e
+```
+
+加入以下内容，示例为**每天机器本地时区 03:00**。确认本机 `flock` 位于 `/usr/bin/flock`，否则替换为实际绝对路径：
+
+```cron
+PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
+0 3 * * * /usr/bin/flock -n /run/lock/worklog-backup.lock /bin/bash /usr/local/sbin/worklog-backup.sh >> /var/log/worklog-backup.log 2>&1
+```
+
+`flock -n` 持锁至脚本结束；已有任务持锁时直接跳过，避免 cron 重叠。日期计算留在脚本内，**不要把含 `%` 的日期命令直接放进 crontab**（cron 会特殊处理 `%`）。定期检查日志和服务状态；日志持续追加，按需配置轮转并保持 root 所有、0600 权限。
+
+系统未安装或未启用 cron／crond 时，需按发行版安装并启用相应服务（包名、服务名不同）。cron 不补跑关机期间错过的任务。脚本不自动清理历史备份，需自行规划留存、空间和加密异地保存。**恢复前先暂停该 cron 条目并确认正在执行的备份已结束，避免与恢复冲突；恢复及验证完成后再按需启用。**
+
 ## 2. 恢复现用数据库
 
 **`restore` 的参数是独立 SQLite 备份文件，目标由现用配置的 `db_dsn` 决定，无需修改配置。** 目标已存在时，CLI 校验备份后显示 `[y/N]` 确认提示；只有输入完整一行 `Y` 或 `y` 并回车才继续。直接回车默认取消；`yes`、带空格的输入、其他输入或 EOF 也取消，原库不变，命令返回非零。
