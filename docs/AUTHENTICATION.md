@@ -2,11 +2,11 @@
 
 ## 1. 身份模型
 
-Worklog 是受保护的**单用户服务**，没有注册、登录页面、用户管理或 OAuth 授权服务器。  
+WorkLog 是受保护的单用户服务，没有注册、登录页面、用户管理或 OAuth 授权服务器。
 所有受信客户端访问 JSON 配置中 `user_id` 指定的工作台（默认 `owner`），不能通过请求体、工具参数或 `X-Forwarded-User` 选择用户。
 
-浏览器 Basic、Bearer 读写令牌和 stdio 是独立的认证渠道，不是不同用户账号。  
-内部数据按用户标识隔离不等于已经提供多用户产品；不要把更改 `user_id` 当作登录切换功能。
+浏览器 Basic、Bearer 读写令牌和 stdio 是不同的访问渠道，不是不同用户账号。它们共用同一工作台，但权限不同。
+内部按用户标识隔离数据，不代表产品支持多用户；不要把更改 `user_id` 当作登录切换功能。
 
 服务业务配置仅使用 JSON，通过 `./bin/worklog --conf /absolute/path/config.json` 启动；不从环境变量或 `.env` 读取业务配置。下文 JSON 片段应合并到该配置文件，修改后重启生效。
 
@@ -19,7 +19,8 @@ Worklog 是受保护的**单用户服务**，没有注册、登录页面、用�
 | REST Bearer 写令牌 | 是 | 是 | 否，不受 MCP 开关影响 |
 | REST / MCP Bearer 只读令牌 | 是 | 否 | 否 |
 | MCP HTTP Bearer 写令牌 | 是 | 是 | 默认否，运维开启后允许 |
-| stdio | 是 | 默认是 | 默认否，运维开启后允许；只读模式下仍禁止 |
+| stdio（默认） | 是 | 是 | 默认否，运维开启后允许 |
+| stdio（`stdio_read_only: true`） | 是 | 否 | 否，即使开启破坏性操作也不允许 |
 
 普通写权限允许修改已有正文和字段，**不保证信息不会丢失**。当前没有日志历史或回收站，不能用“禁止删除”替代备份。
 
@@ -33,7 +34,8 @@ Worklog 是受保护的**单用户服务**，没有注册、登录页面、用�
 - 请求 Host 和实际远端地址都是 loopback。
 - 请求通过 Host / Origin 等安全检查。
 
-经本地代理转发但保留公网域名 Host 的请求不会获得匿名权限。  
+经本地代理转发但保留公网域名 Host 的请求不会获得匿名权限。服务只检查直连地址，不用 `X-Forwarded-For` 判断原始来源：**若本地代理把外部请求的 Host 改成 loopback，可能使请求满足匿名条件。** 不要这样配置代理，也不要把本地匿名模式当成代理后方的认证防线；远程访问应设置 Basic 密码、保留原始 Host 并使用 HTTPS。
+
 设置 Basic 密码会关闭匿名 REST；给出错误的 Authorization 也不会退回匿名模式。
 
 **同机其他进程也能访问匿名 REST。** 这不是同机 agent 沙箱。  
@@ -67,7 +69,7 @@ Basic 不是加密方式，只能经 HTTPS 用于远程访问。
 
 分别用 `openssl rand -hex 32` 生成令牌并安全写入 JSON；`read_token` 可省略。
 
-两个令牌均至少 **32 字节**，且必须不同。它们也应与 Basic 密码独立。  
+配置的每个令牌至少 **32 字节**，读写令牌必须不同，也应与 Basic 密码独立。
 支持 `Authorization: Bearer <token>`（scheme 不区分大小写），不要放在 URL、工具参数、前端公开 `config.json` 或源码中。
 
 本地未配置写令牌时，服务自动读取／生成 `token_file`（默认 `./data/mcp-token`）。文件以 0600 权限创建，不输出令牌到日志。
@@ -124,7 +126,7 @@ Host / Origin 白名单是请求可信性检查，不是登录凭证。CORS 也�
 推荐浏览器与 API 同源：前端使用 `credentials: same-origin`，不提供跨域 Cookie 或跨域登录机制。  
 跨域 JSON API 仅向可信 Origin 返回 CORS 头，支持 PUT / PATCH 等预检，预检缓存为 600 秒。
 
-写请求要求 JSON。无 Origin 的 cross-site 请求仅允许 GET / HEAD 顶层页面导航；跨站 fetch 或子资源不能借用本机／Basic 凭证。  
+REST 写请求除项目 ZIP 导入外要求 JSON。没有 Origin 且标为 `cross-site` 的请求，仅允许 GET／HEAD 顶层页面导航；跨站 fetch 或子资源不能借用本机／Basic 凭证。
 `/healthz` 无需认证但仍校验 Host，只返回数据库可用状态。
 
 Nginx 示例见[部署与配置](DEPLOYMENT.md#nginx-https-反向代理)。  
@@ -132,7 +134,7 @@ Nginx 示例见[部署与配置](DEPLOYMENT.md#nginx-https-反向代理)。
 
 ## 5. 凭证保管与轮换
 
-- 配置 JSON 建议 0600，数据目录以 0700、数据库／令牌／备份以 0600 创建；已有目录不会自动修正权限。
+- 在 POSIX 系统上，配置 JSON 建议设为 0600；新建数据目录使用 0700，新建数据库／令牌／备份使用 0600。已有文件和目录不会自动修正权限。容器配置还必须允许运行用户 UID 10001 读取，具体操作见[备份与恢复](OPERATIONS.md#容器)。Windows 使用 ACL（系统文件访问权限），不以 Unix 权限数字作为保障，见 [Windows 安全说明](WINDOWS_DESKTOP.md#权限与本地安全边界)。
 - 使用独立随机凭证，不把凭证提交到仓库或放入可公开读取的静态目录。
 - 更新 JSON 中的凭证后重启服务，再更新客户端。当前每类令牌仅支持一个有效值，没有双令牌平滑轮换机制。
 - 使用自动令牌文件时，停止相关服务、在安全位置替换令牌文件并保持 0600，再重启和更新客户端。若设置了 `write_token`，应轮换 JSON 中的该字段而不是只替换文件。
@@ -155,7 +157,7 @@ Nginx 示例见[部署与配置](DEPLOYMENT.md#nginx-https-反向代理)。
 | 现象 | 检查项 |
 | --- | --- |
 | 401 | Basic 用户／密码是否正确；Bearer 是否属于当前实例；是否误用了旧令牌文件；MCP 不能使用 Basic |
-| 403 | Host / Origin 白名单是否匹配；是否尝试用只读或 REST Bearer 执行写入／删除 |
+| 403 | Host / Origin 白名单是否匹配；只读凭证不能写入，REST Bearer 写令牌不能删除，MCP 写令牌默认不能执行破坏性操作 |
 | 本机访问无需密码 | 是否未配置 Basic，且符合本地匿名条件 |
 | 代理后无法保存 | 是否保留 Origin / Host，并配置准确的 HTTPS Origin |
 | MCP 无法删除 | 默认策略如此；确认确有需要、完成备份后，由运维决定是否授权，而不是添加工具确认参数 |

@@ -1,11 +1,12 @@
 # 工作日历自定义
 
-工作日、节假日和调休仅由前端的一份 JSON 文件控制，后端 `config.json` 不提供日历配置项。旧的浏览器 `worklog.v2.calendar` 数据不再读取。
+本文用于调整周末、节假日和调休显示。修改前端的 `work-calendar.json` 即可，后端 `config.json` 没有日历配置项。旧的浏览器 `worklog.v2.calendar` 数据不再读取。
 
 ## 文件位置与生效方式
 
 - **开发或构建前**：编辑 `Web/public/work-calendar.json`。Vite 开发服务直接提供该文件，`cd Web && npm run build` 会将它复制到 `Web/dist/work-calendar.json`。
-- **已经部署**：直接替换前端发布目录中的 `work-calendar.json`。Go 内置静态服务默认目录是 `Web/dist`；自定义 `static_dir` 时，替换该目录中的文件。
+- **Linux 或独立静态部署**：替换前端发布目录中的 `work-calendar.json`。Go 默认目录是 `Web/dist`；自定义 `static_dir` 时，替换该目录中的文件。升级可能覆盖此文件，请另存自定义副本。
+- **Windows／macOS 桌面版**：资源嵌入程序，不能用磁盘文件覆盖。需在构建前修改 `Web/public/work-calendar.json`，再重新构建桌面版。
 - **Docker**：可修改源文件后重建镜像，或在 Compose 对应用服务添加只读挂载：
 
   ```yaml
@@ -15,9 +16,9 @@
 
   保留原有数据卷；宿主机文件必须存在且容器用户可读。若修改了容器的静态目录，挂载目标也要相应调整。
 
-本地模式与后端模式均从**前端页面同目录**读取 `./work-calendar.json`，支持子目录部署，不请求后端日历 API。替换文件后刷新页面即可，无需重启后端；配置不会自动轮询更新。每次加载使用 `no-store`，如使用 CDN 或反向代理缓存，还需确保该文件不被缓存或及时清理缓存。
+本地模式与后端模式均从前端页面同目录读取 `./work-calendar.json`，支持子目录部署，不请求后端日历 API。磁盘静态部署替换文件后刷新页面即可，无需重启后端；配置不会自动轮询更新。每次加载使用 `no-store`，如使用 CDN 或反向代理缓存，还需确保该文件不被缓存或及时清理缓存。
 
-默认文件参考 `Web/tests/fixtures/work-calendar.json`，包含 **2026 年七个节日和六个调休上班日**。这不是在线自动更新的日历；新年份需自行维护，未覆盖的日期仅按每周规则判断。
+默认文件为 [Web/public/work-calendar.json](../Web/public/work-calendar.json)，包含 **2026 年七个节日和六个调休上班日**。它不会在线自动更新；新年份需自行维护，未覆盖的日期仅按每周规则判断。
 
 ## JSON 结构
 

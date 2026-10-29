@@ -1,23 +1,161 @@
 # 部署与配置
 
-Linux 优先从 [Releases](https://github.com/MisakaAI/WorkLog/releases) 下载 `.tar.zst` 预编译包部署，目标主机无需 Go / Node.js；下载部署与自行编译发布包的独立步骤见 [Linux / systemd 部署](DEPLOYMENT.md#linux-systemd-部署)。源码构建、发布包打包与部署流程见本文后续章节；认证细节见[身份认证与安全](AUTHENTICATION.md)。
-远程访问推荐同源部署：Nginx → 本机 Go 服务，由 Go 提供前端、`/api` 和 `/mcp`。
+本文介绍 Linux 服务安装、Docker、数据库配置和 HTTPS 访问。桌面版见 [Windows](WINDOWS_DESKTOP.md)／[macOS](MACOS_DESKTOP.md)，源码运行和发布打包见[开发文档](DEVELOPMENT.md)。
+
+安装完成后，先在本机创建一条任务并刷新，确认数据已保存，再配置远程访问。WorkLog 是单用户系统；不要把一个实例当作多账号服务。
+
+## Linux systemd 部署
+
+### 1. 下载并解压
+
+目标主机需要 Linux、systemd、Bash、GNU 常用文件工具、支持 zstd 的 tar 和 `zstd`。不需要 Go、Node.js 或独立数据库。Debian／Ubuntu 可运行 `sudo apt install zstd` 安装解压依赖。
+
+从 [Releases](https://github.com/MisakaAI/WorkLog/releases) 下载对应文件：
+
+| `uname -m` | 发布包 |
+| --- | --- |
+| `x86_64` | `worklog-v<版本>-linux-x86_64.tar.zst`（amd64） |
+| `aarch64`／`arm64` | `worklog-v<版本>-linux-arm64.tar.zst` |
+
+以下以 x86_64 为例，将 `<版本>` 替换为实际版本：
+
+```sh
+tar --zstd -xf worklog-v<版本>-linux-x86_64.tar.zst
+cd worklog-v<版本>-linux-x86_64
+```
+
+包内包含后端 `bin/worklog`、前端 `Web/dist/`、安装／卸载脚本、配置示例、systemd 模板和文档。安装脚本依赖这个布局，**不要直接在源码仓库运行 `scripts/install-linux.sh`**。需要自行打包时见[构建发布包](DEVELOPMENT.md#构建发布包)。
+
+### 2. 选择一种安装方式
+
+#### 系统服务
+
+```sh
+sudo bash ./install.sh
+```
+
+脚本创建或复用 `worklog` 用户，服务不以 root 运行。安装完成后自动启动并设置开机自启。
+
+| 路径 | 用途 |
+| --- | --- |
+| `/opt/worklog/bin/worklog` | 后端程序，root 管理 |
+| `/opt/worklog/Web/dist` | 前端文件，服务用户只读 |
+| `/etc/worklog/config.json` | 配置，root 管理、服务主组只读（0640） |
+| `/var/lib/worklog` | 数据库、WAL 和令牌，服务用户可写（0700） |
+| `/etc/systemd/system/worklog.service` | 服务单元 |
+
+模板见 [worklog.service](worklog.service)。复用已有用户时，配置文件使用该用户实际主组。
+
+#### 当前用户服务
+
+不使用 sudo：
+
+```sh
+bash ./install.sh
+```
+
+脚本不创建用户，以当前用户运行 `systemd --user` 服务。
+
+| 路径 | 用途 |
+| --- | --- |
+| `~/.local/share/worklog/app/bin/worklog` | 后端程序 |
+| `~/.local/share/worklog/app/Web/dist` | 前端文件 |
+| `~/.config/worklog/config.json` | 配置（0600） |
+| `~/.local/share/worklog/data` | 数据和令牌（0700） |
+| `~/.config/systemd/user/worklog.service` | 用户服务单元 |
+
+支持用绝对路径的 `XDG_DATA_HOME` 和 `XDG_CONFIG_HOME` 调整基础目录。这些变量仅影响安装路径，不是应用业务配置。
+
+请在正常登录会话中执行，不要简单使用 `sudo -u`。脚本会先检查 systemd 用户管理器是否可访问。需要开机运行、退出登录后仍保持运行时，由管理员执行：
+
+```sh
+sudo loginctl enable-linger 用户名
+```
+
+系统服务和用户服务默认都使用 `127.0.0.1:12450`。不要同时运行两份而不调整端口和数据路径。
+
+### 3. 确认启动成功
+
+首次安装自动生成使用绝对路径的 SQLite 配置，创建数据库、执行迁移并生成 MCP 写令牌，无需单独初始化。
+
+```sh
+curl --fail http://127.0.0.1:12450/healthz
+```
+
+预期返回 `{"ok":true}`。打开 **http://127.0.0.1:12450**，创建任务或日志，保存后刷新确认仍在。
+
+系统服务检查：
+
+```sh
+sudo systemctl status worklog.service --no-pager
+sudo journalctl -u worklog.service -n 100 --no-pager
+sudo systemctl restart worklog.service
+```
+
+用户服务检查：
+
+```sh
+systemctl --user status worklog.service --no-pager
+journalctl --user -u worklog.service -n 100 --no-pager
+systemctl --user restart worklog.service
+```
+
+启动失败时先看日志中的配置、权限、端口占用和路径错误。触发启动频率限制后，修复原因，再执行对应的 `systemctl [--user] reset-failed worklog.service` 并启动；`[--user]` 表示用户服务才添加该选项。日志保留与轮转由主机 journald 配置决定。
+
+### 4. 修改配置与升级
+
+系统配置为 `/etc/worklog/config.json`，用户配置默认为 `~/.config/worklog/config.json`。修改 JSON 后重启服务，不需要 `daemon-reload`；修改服务单元后才需要对应的 `systemctl [--user] daemon-reload`。
+
+**先[备份](OPERATIONS.md)，再升级。** 解压新版，用与原安装相同的身份及 XDG 路径重新运行 `install.sh`：
+
+- 保留已有配置和数据，不自动合并新配置字段。
+- 准备好新文件后停止服务，再替换程序、整套前端和服务单元，最后启动。
+- 自定义服务单元会被覆盖，请先备份；持久调整优先使用 systemd drop-in。
+- 不保证失败后自动回滚。数据库迁移可能不可逆，换回旧程序不等于恢复旧数据库。
+
+系统服务只允许状态目录持久写入，并启用只读文件系统、隐藏 home、禁止提权等限制。若改用自定义数据或令牌路径，需同步调整权限和沙箱。用户服务以当前用户权限运行，不提供同等文件系统隔离。两者均使用 `UMask=0077`、异常退出重启和 SIGTERM 优雅退出。
+
+安装脚本不配置防火墙、代理或 TLS，也不自动处理 SELinux／AppArmor 策略。可用 `sudo systemd-analyze verify /etc/systemd/system/worklog.service` 检查系统服务指令兼容性。
+
+### 5. 卸载
+
+先将备份复制到安装数据目录之外。使用与安装相同的身份和 XDG 环境：
+
+```sh
+sudo bash ./uninstall.sh  # 系统服务
+bash ./uninstall.sh       # 用户服务，不使用 sudo
+```
+
+两种方式都会停止并禁用服务，删除程序和服务单元：
+
+- 系统级默认分别询问是否删除 `worklog` 用户／同名组、是否删除配置／数据。仅 `Y`／`y` 同意，回车、其他输入和 EOF 均保留；保留数据不影响程序卸载。
+- 用户级默认不询问，保留配置和数据，不操作系统用户或组。
+
+`purge`（也支持 `--purge`）**不询问、不二次确认，直接删除，无法撤销**：
+
+```sh
+sudo bash ./uninstall.sh purge  # 删除程序、服务、配置、数据和 worklog 用户／同名组
+bash ./uninstall.sh purge       # 删除当前用户安装的程序、服务、配置和数据
+```
+
+清理只覆盖上述约定目录，不追踪配置中的外部路径，也不删除 PostgreSQL 数据库。数据目录内的所有文件（包括其中的备份）都会被删除。
+
+系统级删除账户时，即使账户在安装前已存在，也会尝试删除。请确认未被其他服务使用。不会删除其他名称的主组，不使用 `userdel -r` 删除自定义主目录；账户仍被进程使用或组被其他用户作为主组时可能失败，已完成的卸载不回滚。只删账户而保留数据后，重装可能需要修复 UID／GID 权限。
+
+卸载不关闭 lingering，以免影响其他用户服务。卸载脚本也可通过源码中的 `scripts/uninstall-linux.sh` 运行，不依赖发布包布局。
 
 ## JSON 配置
 
-编译后的 Go 程序支持通过 `--conf` 指定 JSON 文件或目录；指定目录时读取其中的 `config.json`：
+业务配置仅来自 JSON 和内置默认值，不读取 `WORKLOG_*` 环境变量或 `.env`。普通 CLI 不自动搜索配置文件；桌面版默认配置路径见平台文档。
+
+`--conf` 可指定文件或目录（目录中读取 `config.json`），必须放在子命令之前：
 
 ```sh
-# 以实际服务运行用户执行，或由管理员创建后授予该用户访问权限。
-install -d -m 700 /etc/worklog
-install -m 600 config.example.json /etc/worklog/config.json
-# 编辑配置，尤其是数据库、令牌和前端产物的绝对路径。
-./bin/worklog --conf=/etc/worklog
-# 也可直接指定文件：
-./bin/worklog --conf=/etc/worklog/config.json
+./bin/worklog --conf=/absolute/path/config.json
+./bin/worklog --conf=/absolute/path/config.json --help
 ```
 
-完整模板见 [config.example.json](../config.example.json)。例如：
+模板见 [config.example.json](../config.example.json)。安装脚本已创建配置时，直接修改现用文件，不要覆盖成模板。手动部署应先创建服务用户可写的数据目录，使用绝对路径，例如：
 
 ```json
 {
@@ -26,135 +164,133 @@ install -m 600 config.example.json /etc/worklog/config.json
   "db_dsn": "/var/lib/worklog/worklog.db",
   "static_dir": "/opt/worklog/Web/dist",
   "token_file": "/var/lib/worklog/mcp-token",
-  "timezone": "Asia/Shanghai",
-  "stdio_read_only": false
+  "timezone": "Asia/Shanghai"
 }
 ```
 
-- **业务配置仅使用 JSON 和内置默认值**，不读取 `WORKLOG_*` 环境变量或 `.env`。不指定 `--conf` 时仅使用内置默认值，不自动搜索配置文件；Windows 桌面版有单独的默认配置路径约定。
-- 主机／Origin 白名单使用字符串数组，两个开关使用 JSON 布尔值，其余使用字符串。不支持 JSON 注释；未知字段、错误类型、无效配置或不存在的文件会导致启动失败。
-- `static_dir` 设为空字符串可关闭静态服务。本地未设置 `write_token` 时仍自动生成／读取 `token_file`。
-- **所有相对路径仍以进程工作目录为基准**，不是配置文件目录。独立部署建议像上例一样使用绝对路径，并预先创建可由服务用户写入的数据目录；前端目录需包含构建好的文件。
-- 配置可能包含密码和令牌，建议文件权限 `0600`、目录权限 `0700`，仅允许服务用户访问，不要提交到版本库或放入静态目录。修改后需重启。
-- `--conf` 必须放在子命令之前，所有命令共用配置。`./bin/worklog --conf=/etc/worklog` 后面的子命令决定程序的运行模式：
+**配置内部的相对路径以进程工作目录为准，不是配置文件目录。** systemd 系统服务工作目录为 `/var/lib/worklog`，用户服务为对应的 `data` 目录。
 
-| 命令 | 作用与适用场景 |
+配置文件含密码或令牌时应限制读取权限。手动部署建议文件 0600、目录 0700；系统安装脚本使用 root 与服务主组可读的 0640。不要把配置放入静态目录或版本库，不要为了读取配置而以 root 运行服务。
+
+不支持 JSON 注释。未知字段、错误类型、无效值或指定文件不存在都会导致启动失败；修改后需重启。
+
+### 字段参考
+
+下表为普通 CLI 的内置默认值，模板和桌面默认值可能不同：
+
+| 字段 | 默认值与说明 |
 | --- | --- |
-| `serve` | 启动常驻 HTTP 服务，提供网页、REST API 和 MCP HTTP 接口；这是默认命令。会在服务启动前自动执行数据库迁移。部署常规 Web 服务使用它。 |
-| `stdio` | 启动 MCP stdio 传输，从标准输入／输出与本机 MCP 客户端通信；不是 HTTP 服务，通常由 Codex 等 MCP 客户端按需启动，协议输出占用 stdout。也会自动迁移数据库。 |
-| `migrate` | 只初始化／升级数据库结构，然后退出；适合部署时显式执行迁移，不会启动 HTTP 或 stdio 服务。 |
-| `backup PATH` | 创建 SQLite 数据库备份到指定路径，并校验备份；目标文件必须不存在。用于定期备份，不启动服务。PostgreSQL 请使用 `pg_dump`，见[运维说明](OPERATIONS.md)。 |
-| `restore PATH` | 将指定的独立 SQLite 备份恢复到配置中的数据库路径，然后退出；目标数据库及其 WAL/SHM 文件必须不存在，不会覆盖已有数据库。恢复前应停止所有写入进程。PostgreSQL 请使用 `pg_restore`。 |
-
-例如：
-
-```sh
-./bin/worklog --conf=/etc/worklog serve
-./bin/worklog --conf=/etc/worklog stdio
-./bin/worklog --conf=/etc/worklog migrate
-./bin/worklog --conf=/etc/worklog backup /var/backups/worklog/backup.db
-./bin/worklog --conf=/etc/worklog restore /var/backups/worklog/backup.db
-./bin/worklog --help
-```
-
-不写子命令时（例如 `./bin/worklog --conf=/etc/worklog`）等同于 `serve`，会启动常驻 HTTP 服务而不是仅检查配置后退出；进程会持续运行，直到被停止。`--help` 则只显示用法并退出。
-
-配置目录通常由管理员管理；不要为了读取 `/etc/worklog` 而使用 root 运行服务。反向代理部署时，还需设置 `basic_password`、`write_token`、`allowed_hosts` 和 `allowed_origins`，见下表和 Nginx 示例。
-
-## systemd 持久运行
-
-按 [Linux Systemd 部署说明](DEPLOYMENT.md#linux-systemd-部署)解压发布包并运行 `install.sh`：root 执行时安装系统服务，创建／复用专用 `worklog` 用户，配置位于 `/etc/worklog/config.json`；非 root 执行时默认以当前用户安装 systemd 用户服务，配置位于 `~/.config/worklog/config.json`（支持 XDG 路径）。重复安装保留已有配置和数据。系统服务模板见 [worklog.service](worklog.service)，用户服务由安装脚本单独生成。
-
-## 配置字段
-
-完整模板见 [config.example.json](../config.example.json)。以下为程序内置默认值；模板中的部署路径可能不同。
-
-| JSON 字段 | 默认／用途 |
-| --- | --- |
-| `addr` | `127.0.0.1:12450` |
-| `db_driver` | `sqlite` 或 `postgres`，默认 sqlite |
-| `db_dsn` | `./data/worklog.db`；PostgreSQL 使用连接 URL |
-| `user_id` | `owner`，仅由可信服务端设置 |
-| `timezone` | `Asia/Shanghai`，程序内嵌 tzdata |
-| `static_dir` | `Web/dist`；空串关闭静态服务 |
-| `token_file` | `./data/mcp-token`，本地未设置写令牌时生成／读取 |
-| `write_token` | 至少 32 字节的独立 Bearer 写令牌 |
-| `read_token` | 可选、与写令牌不同的至少 32 字节只读令牌 |
-| `basic_user` / `basic_password` | `worklog` / 空；非空密码至少 8 字节 |
-| `allowed_hosts` | 主机名字符串数组，不含协议和端口；默认 localhost / loopback |
-| `allowed_origins` | 精确 Origin 字符串数组，默认本机 Vite 的 localhost / 127.0.0.1:5173 |
-| `mcp_allow_destructive` | `false`；设为 `true` 才允许 MCP / stdio 写入方删除／清空，不扩大 REST Bearer 权限 |
+| `addr` | `127.0.0.1:12450`，监听地址 |
+| `db_driver` | `sqlite`，也可为 `postgres` |
+| `db_dsn` | `./data/worklog.db`；PostgreSQL 使用连接串 |
+| `user_id` | `owner`，仅由可信服务端设置，不是登录切换功能 |
+| `timezone` | `Asia/Shanghai`，程序内嵌时区数据 |
+| `static_dir` | `Web/dist`；空字符串关闭磁盘静态服务 |
+| `token_file` | `./data/mcp-token`；未设置写令牌时读取或生成 |
+| `write_token` | 默认未设置；显式值至少 32 字节 |
+| `read_token` | 默认未设置；可选只读令牌，至少 32 字节且不同于写令牌 |
+| `basic_user`／`basic_password` | `worklog`／空；非空密码至少 8 字节 |
+| `allowed_hosts` | `["localhost","127.0.0.1","::1"]`；主机名，不含协议和端口 |
+| `allowed_origins` | `["http://localhost:5173","http://127.0.0.1:5173"]`；精确 Origin，含协议和端口，不含路径 |
+| `mcp_allow_destructive` | `false`；允许有写权限的 MCP／stdio 客户端删除、清空等，不扩大 REST Bearer 权限 |
 | `stdio_read_only` | `false`；设为 `true` 强制 stdio 只读 |
 
-非 loopback 绑定必须显式设置写令牌和 Basic 密码。  
-即使绑定 loopback，远程代理部署也应设置强凭证和准确的域名／HTTPS Origin 白名单。
+白名单是字符串数组，两个开关是布尔值，其余字段为字符串。非 loopback 监听必须显式设置写令牌和 Basic 密码；即使监听本机，远程代理部署仍需配置这些凭证和域名白名单。完整权限边界见[身份认证与安全](AUTHENTICATION.md)。
 
-数据目录以 0700、数据库／令牌／备份以 0600 创建。已有目录不会自动改变权限。  
-SQLite WAL 必须放在本机磁盘，不能使用 NFS / SMB 等不适合 WAL 的共享文件系统。
+数据目录以 0700、数据库／令牌／备份以 0600 创建，已有目录不会自动修正权限。SQLite WAL 数据必须位于本机磁盘，不要使用 NFS／SMB 共享文件系统。
 
-## 静态文件与运行时配置
+### CLI 命令
 
-Go 从服务端 JSON 配置派生并动态提供公开的 `/config.json`，固定使用同源 `/api` 并传入业务时区，**不读取磁盘上的 dist/config.json**，也不会将令牌或数据库连接信息注入浏览器配置。
-首页与配置不长缓存；hash assets 使用 `private, max-age=31536000, immutable`。
+| 命令 | 作用 |
+| --- | --- |
+| `serve`（默认） | 启动网页、REST API 和 MCP HTTP，启动前自动迁移数据库 |
+| `stdio` | 启动本机 MCP 标准输入／输出通信，也会自动迁移；不是 HTTP 服务 |
+| `migrate` | 仅初始化／升级数据库，然后退出 |
+| `backup PATH` | 创建并校验 SQLite 备份，目标必须不存在 |
+| `restore PATH` | 恢复独立 SQLite 备份；目标数据库及 WAL／SHM 必须不存在 |
 
-`static_dir` 必须指向专用前端产物目录。启动时会拒绝源码根、文件系统根及包含已配置数据库／令牌和默认备份路径的目录。
-使用 `--conf` 时，也会拒绝将配置文件放在静态目录内。静态服务只放行首页、配置、图标和 `assets/` 下的文件，不提供目录列表，拒绝越界符号链接。仍不得把源码、数据库或备份放入静态目录。
+不写子命令等同于 `serve`，会持续运行，不是仅检查配置。所有命令共用配置，例如 `./bin/worklog --conf=/etc/worklog backup /安全路径/backup.db`。备份与恢复的完整操作见[运维文档](OPERATIONS.md)。
 
-独立静态部署及本地浏览器模式见[前端说明](../Web/README.md)。  
-独立前端连接后端时，推荐同源代理，并在运行时配置中设置与后端一致的 `businessTimezone`。  
-没有配置时，今天标签使用浏览器时区；日志首次日期仍以 `/today` 为准，任务表单默认日期沿用浏览器本地日期。
+### 前端文件
+
+`static_dir` 应只包含前端构建产物。Go 动态提供公开的 `/config.json`，固定指向同源 `/api` 并传入业务时区，不读取磁盘上的 `dist/config.json`，也不向浏览器输出密码、令牌或数据库连接信息。
+
+首页和配置不长缓存；带 hash 的资源使用 `private, max-age=31536000, immutable`。静态服务只提供首页、公开配置、图标、工作日历和 `assets/` 文件，拒绝目录列表和越界符号链接。启动时拒绝源码根、文件系统根以及含已配置数据库／令牌、默认备份路径的静态目录；使用 `--conf` 时也拒绝配置位于静态目录内。仍不要把任何私有文件放入该目录。
+
+独立静态部署和浏览器本地模式见[前端说明](../Web/README.md)。自定义工作日历见[工作日历文档](WORK_CALENDAR.md)。
 
 ## Docker Compose
 
-在项目根目录准备配置和数据目录（以下权限命令适用于 Linux）：
+需要 Git、Docker、Compose 插件和下载基础镜像／依赖的网络。仓库提供本地构建配置，不依赖预先发布的容器镜像。先获取源码；已有克隆可直接进入仓库：
+
+```sh
+git clone https://github.com/MisakaAI/WorkLog.git
+cd WorkLog
+```
+
+以下在仓库根目录操作，权限命令适用于 Linux：
 
 ```sh
 cp config.docker.example.json config.local.json
 chmod 600 config.local.json
-# 用当前用户编辑 config.local.json：
-# 分别执行 openssl rand -hex 32，填入独立的 write_token 和 basic_password；
-# 修改 allowed_hosts / allowed_origins 为实际域名和 HTTPS Origin。
 install -d -m 700 deploy
+openssl rand -hex 32
+openssl rand -hex 32
+```
+
+用两个不同随机值分别填写 `config.local.json` 的 `write_token` 和 `basic_password`，不要使用共享默认密码。将 `allowed_hosts`／`allowed_origins` 改为实际访问的主机名和 Origin；本机访问时保留模板的 loopback 项。然后：
+
+```sh
 sudo install -o 10001 -g 10001 -m 600 config.local.json deploy/config.json
 docker compose up --build -d
 docker compose logs --tail=100 worklog
+curl --fail http://127.0.0.1:12450/healthz
 ```
 
-- `deploy/config.json` 只读挂载到 `/app/config/config.json`；SQLite 数据和令牌保存在挂载到 `/app/data` 的 `worklog-data` 命名卷中。配置不进入 Git 或镜像；升级时不要删除数据卷。
-- 容器以 UID:GID `10001:10001` 非 root 运行；配置文件需允许该 UID 读取。修改配置时，编辑当前用户持有的 `config.local.json`，重新执行上面的 `sudo install` 并重建服务容器（`docker compose up -d --force-recreate worklog`），确保单文件挂载读取到新文件。rootless Docker、Docker Desktop 或启用用户映射时，需按实际挂载权限调整。
-- 主机只发布 `127.0.0.1:12450`；容器内监听 `0.0.0.0:12450`，因此必须配置凭证。模板的凭证为空，会拒绝启动，不提供共享默认密码。
-- 镜像包含前端与纯 Go 可执行文件，不包含 Node / Go 编译器。直接运行镜像也必须只读挂载自己的 JSON 到 `/app/config/config.json`；所有应用配置均来自该文件，不通过环境变量覆盖。
-- 日历使用前端 `work-calendar.json`。可在构建前编辑 `Web/public/work-calendar.json`，或通过只读挂载替换镜像中的 `/app/web/work-calendar.json`，详见[工作日历自定义](WORK_CALENDAR.md)。
+打开 `http://127.0.0.1:12450`，在浏览器认证提示中输入 `basic_user`（默认 `worklog`）和刚设置的密码。
+
+- 宿主机仅发布 `127.0.0.1:12450`。容器内部监听 `0.0.0.0:12450`，所以模板凭证留空时会拒绝启动。
+- 容器以 UID:GID `10001:10001` 运行。配置只读挂载到 `/app/config/config.json`，数据使用挂载到 `/app/data` 的命名卷；升级时不要删除卷，不要运行 `docker compose down -v`。
+- 修改配置时先编辑当前用户持有的 `config.local.json`，重新执行 `sudo install`，再运行 `docker compose up -d --force-recreate worklog`。替换单文件挂载后不要仅重启旧容器。
+- rootless Docker、Docker Desktop 或用户映射环境的挂载权限可能不同，应按实际 UID 调整，不要把凭证改为全员可读。
+- 镜像含前端、纯 Go 程序和无秘密的配置模板，不含 Node／Go 编译器；用户私有配置不打入镜像。直接运行镜像时也需挂载自己的 JSON 配置，不使用环境变量覆盖。
+
+升级时先[备份](OPERATIONS.md#容器)，更新源码后执行 `docker compose up --build -d`，再检查日志、健康状态和业务保存。
 
 ### Compose 使用 PostgreSQL
 
-首次部署时，以上步骤改用 [config.postgres.example.json](../config.postgres.example.json) 创建 `config.local.json`，不要使用 SQLite 模板。在安装到 `deploy/config.json` 之前，另准备数据库密码文件并补全 DSN：
+首次部署时，将上面的 SQLite 模板换成 [config.postgres.example.json](../config.postgres.example.json)。先创建 `deploy/`，再准备独立数据库密码：
 
 ```sh
-# 以宿主机当前用户执行；生成独立于 Worklog 令牌和 Basic 密码的数据库密码。
+cp config.postgres.example.json config.local.json
+chmod 600 config.local.json
+install -d -m 700 deploy
 (umask 077; openssl rand -hex 32 > deploy/postgres-password.txt)
-# 用当前用户编辑 config.local.json：将密码文件中的值填入 db_dsn 的密码部分；
-# 仍需设置 write_token / basic_password，再安装容器配置。
+```
+
+将密码文件中的值填入 `config.local.json` 的 `db_dsn` 密码部分，同时设置独立的 `write_token`、`basic_password` 和访问白名单，然后：
+
+```sh
 sudo install -o 10001 -g 10001 -m 600 config.local.json deploy/config.json
 docker compose -f compose.yaml -f compose.postgres.yaml up --build -d
 ```
 
-PostgreSQL 官方镜像通过文件型 secret 读取初始化密码，不依赖宿主机环境变量或 `.env`；Compose 中的 `POSTGRES_USER`、`POSTGRES_DB` 和 `POSTGRES_PASSWORD_FILE` 仅用于第三方镜像的固定初始化参数，没有宿主机环境变量插值。模板使用 `worklog` 数据库和角色。密码文件仅宿主机用户可读，勿将其设为空或提交到版本库。
+后续对此部署执行 Compose 检查、升级或备份命令时，也使用同一组 `-f` 文件。
 
-PostgreSQL 不发布外部端口，使用独立持久化卷。修改密码文件不会修改已初始化数据库的密码，需要同时在数据库中轮换凭证并更新 JSON 的 DSN。配置 PostgreSQL 不会自动搬迁 SQLite 数据。
+PostgreSQL 使用独立持久化卷，不发布宿主机端口。官方镜像通过文件型 secret 读取初始化密码，模板数据库和角色名均为 `worklog`。Compose 的 `POSTGRES_*` 仅用于数据库镜像初始化，不是 WorkLog 配置入口。
 
-镜像构建需要访问基础镜像仓库；配置文件存在不代表当前部署环境已验证镜像构建或容器运行。
+修改密码文件不会轮换已初始化数据库的密码；需要在数据库中改密并同步更新 DSN。切换 PostgreSQL 不会自动搬迁 SQLite 数据。
 
-## PostgreSQL
+## PostgreSQL 配置
 
-不使用时无需安装。先创建专用数据库及有迁移权限的用户：
+不使用 PostgreSQL 时无需安装。使用已有数据库服务时，先创建专用用户和数据库，用户需有迁移权限：
 
 ```sql
 CREATE USER worklog WITH PASSWORD 'REPLACE_WITH_SECRET';
 CREATE DATABASE worklog OWNER worklog;
 ```
 
-在服务使用的 JSON 文件中设置：
+将以下字段合并到现用 JSON，替换主机和密码；密码中的 URL 特殊字符需要编码：
 
 ```json
 {
@@ -163,28 +299,17 @@ CREATE DATABASE worklog OWNER worklog;
 }
 ```
 
-以上字段合并到完整配置中，再执行：
+远程连接使用验证证书的 TLS；仅本机可信测试使用 `sslmode=disable`。建议在 DSN 中写全主机、用户、数据库和凭证。存在非空 `PG*` 环境变量时 WorkLog 拒绝启动，应从服务环境清除。连接串仍遵循 pgx 语义，可读取密码文件、service 和 TLS 文件；证书路径可显式写入 `sslrootcert`、`sslcert`、`sslkey`。原生 `pg_dump`／`pg_restore` 不受应用的环境限制。
 
-```sh
-./bin/worklog --conf=/etc/worklog migrate
-./bin/worklog --conf=/etc/worklog
-```
-
-密码等 URL 特殊字符需编码；远程数据库使用验证证书的 TLS，本机可信测试可用 `sslmode=disable`。
-建议在 `db_dsn` 中显式填写完整的主机、用户、数据库和凭证。Worklog 不接受 PostgreSQL 环境配置：存在非空 `PG*` 环境变量时会拒绝启动，请从服务运行环境清除并把连接参数写入 JSON 的 `db_dsn`。DSN 保持 pgx 的标准连接串语义（包括驱动的密码文件、service 和 TLS 文件机制）；需要证书时推荐在 DSN 中显式指定 `sslrootcert`、`sslcert`、`sslkey` 路径。这里取消的是环境变量配置入口，并不禁止数据库驱动读取连接所需文件。原生 `pg_dump` / `pg_restore` 的配置不受此限制。
-
-`serve`（默认命令）和 `stdio` 也会自动迁移。  
-配置 PostgreSQL 不会自动搬迁已有 SQLite 数据。
-
-两种数据库有独立的内嵌 goose 迁移。  
-PostgreSQL 使用 advisory session lock；SQLite 升级应由一个部署启动者执行，随后可有多个进程访问同一本地文件，不要并行运行不同版本迁移。  
-升级前备份，恢复见[运维说明](OPERATIONS.md)。
+`serve` 和 `stdio` 自动迁移，也可显式执行 `./bin/worklog --conf=/etc/worklog migrate`。两种数据库有独立迁移；PostgreSQL 使用 advisory session lock，SQLite 应由一个部署启动者升级。不要并行运行不同版本迁移。升级前备份，迁移不是数据搬迁或备份工具。
 
 ## Nginx HTTPS 反向代理
 
-### 配置 Go 服务
+推荐 Nginx → 本机 Go，由 Go 同时提供网页、`/api` 和 `/mcp`。先配置域名解析和有效 TLS 证书。
 
-先按上文准备 `/etc/worklog/config.json`，将以下字段合并到配置中，保留数据库、前端和令牌文件的绝对路径：
+### 1. 配置 WorkLog
+
+将以下字段合并到现用 JSON，保留数据库、前端和令牌路径。替换域名，分别用 `openssl rand -hex 32` 生成两个独立随机值：
 
 ```json
 {
@@ -197,18 +322,11 @@ PostgreSQL 使用 advisory session lock；SQLite 升级应由一个部署启动�
 }
 ```
 
-将域名替换为实际值，分别执行 `openssl rand -hex 32` 生成独立密码和令牌，替换占位值。配置文件仅允许服务用户及管理员读取。
+重启服务。HTTPS Origin 必须明确加入白名单，即使代理到本机也不能省略。
 
-```sh
-./bin/worklog --conf=/etc/worklog
-```
+### 2. 配置 Nginx
 
-正式运行推荐使用 [systemd](DEPLOYMENT.md#linux-systemd-部署) 保持服务运行。
-
-### 配置 Nginx
-
-先将域名解析到服务器，并准备有效的 TLS 证书。  
-以下配置放入 Nginx 的 `http` 上下文（例如发行版启用的站点配置文件），替换域名和证书路径：
+将配置放入 Nginx 的 `http` 上下文（例如已启用的站点文件），替换域名和证书路径：
 
 ```nginx
 server {
@@ -216,18 +334,13 @@ server {
     server_name worklog.example.com;
     return 301 https://worklog.example.com$request_uri;
 }
-
 server {
     listen 443 ssl;
     server_name worklog.example.com;
-
-    ssl_certificate     /etc/letsencrypt/live/worklog.example.com/fullchain.pem;
+    ssl_certificate /etc/letsencrypt/live/worklog.example.com/fullchain.pem;
     ssl_certificate_key /etc/letsencrypt/live/worklog.example.com/privkey.pem;
     ssl_protocols TLSv1.2 TLSv1.3;
-
     client_max_body_size 10m;
-    gzip on;
-    gzip_types text/css application/javascript application/json image/svg+xml;
 
     location / {
         proxy_pass http://127.0.0.1:12450;
@@ -249,28 +362,22 @@ sudo nginx -t
 sudo systemctl reload nginx
 ```
 
-访问 `https://worklog.example.com`，使用配置中的 `basic_user` / `basic_password` 登录浏览器认证提示框。
-不要在 Nginx 再叠加一层 `auth_basic`：浏览器 Basic 和 MCP Bearer 均由 Go 验证，共用 `Authorization` 请求头。
+### 3. 验证访问
 
-**禁止直接向公网开放 Go 的 12450 端口；Basic 密码和令牌必须通过 HTTPS 传输。** HTTPS Origin 必须明确加入白名单，即使代理到本机也不能省略。
+1. 本机 `/healthz` 返回 `{"ok":true}`。若移除了本机 Host 白名单，检查时添加 `-H 'Host: worklog.example.com'`。
+2. 访问 `https://worklog.example.com`，确认出现 Basic 认证提示，任务／日志保存后刷新仍存在。
+3. 确认 12450 端口没有对公网发布，再按 [MCP 指南](MCP.md)验证 Bearer 连接。
+4. 在 Nginx 或入口网关配置限速和认证失败防护。应用业务预算不能代替防暴力破解。
 
-### 部署检查
+**不要直接向公网开放 Go 的 12450 端口。远程 Basic 密码和令牌必须通过 HTTPS 传输。** 不要再为 `/mcp` 叠加 Nginx `auth_basic`，它与 Bearer 共用 `Authorization` 头。
 
-1. 确认 Go 服务启动，`curl http://127.0.0.1:12450/healthz` 返回可用状态。
-2. 按上文设置 Nginx 证书、代理和请求体上限，执行 `nginx -t` 后重载。
-3. 浏览器通过 HTTPS 域名访问，确认需要 Basic 认证，任务／日志保存后刷新仍存在。
-4. 确认 Go 12450 端口没有对公网发布，并使用 MCP 客户端验证 Bearer 通道。
-5. 在入口配置适当的请求限速／认证失败防护，不要把应用业务预算当作防暴力破解。
-
-应用最大请求体为工作台 10 MiB、日志 1 MiB、MCP envelope 2 MiB；  
-上述 Nginx `client_max_body_size 10m` 避免代理先以默认 1 MiB 拦截工作台，应用仍会检查各端点的更细限制。  
-代理也可能生成自己的错误页，不能假定所有错误都符合应用 JSON 格式。
+代理的 10 MiB 请求体上限用于工作台；应用仍限制日志为 1 MiB、MCP 请求为 2 MiB。代理可能返回自己的错误页，不保证都是应用 JSON。保存返回 403 时，先检查 Host／Origin 和代理头，见[认证排查](AUTHENTICATION.md#7-常见问题)。
 
 ### 子目录部署
 
-支持页面与资源挂载 `/worklog/`，但 API 仍在同源根 `/api/`，MCP 仍为 `/mcp`；不自动支持所有端点重定位到 `/worklog/api/`。
+页面和资源可挂在 `/worklog/`，但 API 仍在根 `/api/`，MCP 仍在 `/mcp`，不支持直接把所有端点改为 `/worklog/api/`。
 
-如需该拓扑，将上述 Nginx 配置中的 `location /` 替换为以下位置块。公共代理设置应放在同一个 HTTPS `server` 中，或通过共享 snippet 引入：
+保留上例 HTTPS `server` 的证书和请求体设置。将公共代理设置放到该 `server` 内，再用下列位置块替换原 `location /`：
 
 ```nginx
 proxy_http_version 1.1;
@@ -285,7 +392,7 @@ proxy_read_timeout 30s;
 
 location = /worklog { return 301 /worklog/; }
 location /worklog/ {
-    # 尾部 / 用于剥离 /worklog/ 前缀。
+    # 尾部 / 剥离页面路径前缀。
     proxy_pass http://127.0.0.1:12450/;
 }
 location /api/ { proxy_pass http://127.0.0.1:12450; }
@@ -294,231 +401,4 @@ location = /healthz { proxy_pass http://127.0.0.1:12450; }
 location / { return 404; }
 ```
 
-静态资源采用相对路径，Go 的动态配置仍指向根 `/api`。正式环境需实际验证 TLS、代理和客户端行为，不能以本地测试代替公网验收。
-
-
-## Linux systemd 部署
-
-
-Worklog 在 Linux 下以一个 Go 进程提供前端静态文件、REST API 和 MCP。前后端构建产物分文件安装，不需要运行 Node.js、Vite 或单独的前端服务。
-
-推荐从 Releases 下载预编译包；需要修改源码时再自行构建。两种方式最终使用相同的安装脚本。
-
-## 1. 从 Releases 下载部署（推荐）
-
-在 [Releases](https://github.com/MisakaAI/WorkLog/releases) 下载与主机架构匹配的文件：
-
-| `uname -m` | 发布包 |
-| --- | --- |
-| `x86_64` | `worklog-v<版本>-linux-x86_64.tar.zst`（Go amd64） |
-| `aarch64` / `arm64` | `worklog-v<版本>-linux-arm64.tar.zst` |
-
-目标主机需要 Linux、systemd、Bash、GNU 常用文件工具、支持 zstd 的 tar 和 `zstd`，不需要 Go、Node.js 或独立数据库。Debian / Ubuntu 可通过 `sudo apt install zstd` 安装解压依赖。
-
-例如下载后解压（将版本号替换为实际版本）：
-
-```sh
-tar --zstd -xf worklog-v0.2.0-rc.1-linux-x86_64.tar.zst
-cd worklog-v0.2.0-rc.1-linux-x86_64
-```
-
-压缩包包含 `bin/worklog`、`Web/dist/`、`install.sh`、`uninstall.sh`、配置示例、systemd 模板、版本与架构信息及运维文档。
-
-### A. root 安装：系统服务
-
-```sh
-sudo bash ./install.sh
-```
-
-脚本默认创建专用 `worklog` 系统用户（已存在则复用），**服务不以 root 运行**。安装后自动启动并设置开机自启：
-
-| 路径 | 用途与权限 |
-| --- | --- |
-| `/opt/worklog/bin/worklog` | 后端，root 管理 |
-| `/opt/worklog/Web/dist` | 前端产物，服务用户只读 |
-| `/etc/worklog/config.json` | root 管理，服务主组只读，`0640` |
-| `/var/lib/worklog` | 数据库、WAL 和令牌，worklog 可写，`0700` |
-| `/etc/systemd/system/worklog.service` | 系统服务单元 |
-
-root 模式使用 [worklog.service](worklog.service) 模板，默认账户主组为 `worklog`；复用已有账户时配置文件使用该账户实际主组。
-
-### B. 普通用户安装：当前用户服务
-
-**不使用 sudo** 执行：
-
-```sh
-bash ./install.sh
-```
-
-脚本不会创建用户，而是以当前用户运行 `systemd --user` 服务：
-
-| 路径 | 用途 |
-| --- | --- |
-| `~/.local/share/worklog/app/bin/worklog` | 后端 |
-| `~/.local/share/worklog/app/Web/dist` | 前端 |
-| `~/.config/worklog/config.json` | 当前用户配置，`0600` |
-| `~/.local/share/worklog/data` | 数据和令牌，`0700` |
-| `~/.config/systemd/user/worklog.service` | 用户服务单元 |
-
-支持绝对路径的 `XDG_DATA_HOME` 和 `XDG_CONFIG_HOME` 覆盖上述基础目录。这些是安装路径约定，不是 Worklog 业务配置环境变量。
-
-需要当前用户的 systemd 用户管理器可访问；请通过正常登录会话执行，不要简单使用 `sudo -u`。脚本会在修改文件前检查连接。用户服务使用单独生成的单元，不使用系统服务的 `User=worklog`、`ProtectHome` 或 `StateDirectory`。
-
-默认随用户管理器启动。若需要**开机即运行、退出登录后仍保持运行**，由管理员执行：
-
-```sh
-sudo loginctl enable-linger 用户名
-```
-
-用户服务与系统服务默认都使用 `127.0.0.1:12450`；不要同时安装运行两份而不修改端口和数据路径。
-
-### C. 卸载与彻底清理
-
-使用与安装时相同的身份及 XDG 环境变量运行卸载脚本。不带参数时停止并禁用服务，删除服务单元和程序目录；配置、数据和账户的清理由以下规则决定：
-
-```sh
-sudo bash ./uninstall.sh  # 系统级安装
-bash ./uninstall.sh       # 当前用户安装，不使用 sudo
-```
-
-- **系统级、不带 `purge`**：操作前分别询问是否删除 `worklog` 用户和同名组、是否删除配置和数据。两项独立选择，均提示 `[y/N]`，仅 `Y` / `y` 同意；直接回车、其他输入或 EOF 均默认 `N`，保留对应内容，**但仍继续卸载程序和服务**。
-- **当前用户、不带 `purge`**：不询问，保留配置和数据，不操作系统用户或组。
-
-**`purge`（也支持 `--purge`）为非交互彻底清理模式，不会询问或二次确认，执行即删除，无法撤销。请先自行备份，并确认 `worklog` 账户未被其他服务使用：**
-
-```sh
-sudo bash ./uninstall.sh purge  # 无需确认：删除程序、服务、配置、数据和 worklog 用户/同名组
-bash ./uninstall.sh purge       # 无需确认：删除当前用户的程序、服务、配置和数据
-```
-
-配置和数据清理仅覆盖上述安装约定的目录（系统级为 `/etc/worklog` 和 `/var/lib/worklog`；用户级遵循 XDG 路径），不会追踪配置中的自定义存储路径或删除外部 PostgreSQL 数据库。**配置和数据目录内的所有文件都会被删除，包括下文备份示例中的 `data/backups` 或 `/var/lib/worklog/backups`。卸载前请将备份复制到这些目录之外；只有目录外的备份不会被清理。**
-
-系统级选择删除账户或使用 `purge` 时，即使 `worklog` 用户／组是安装前已存在并被复用的，也会尝试删除；不会删除其他名称的主组，不使用 `userdel -r` 删除自定义主目录或邮件目录。若仍有其他进程使用账户，或其他用户以该组为主组，删除可能失败；脚本会报错退出，不强制删除，之前完成的卸载步骤不会回滚。若只删除账户却保留配置和数据，文件仍属于原 UID/GID，重装后可能需要手动修复权限。
-
-所有模式均不关闭用户 lingering，以免影响其他用户服务。脚本也可直接通过源码中的 `scripts/uninstall-linux.sh` 运行，不依赖发布包布局。
-
-## 2. 自行编译再部署
-
-只在构建机器上安装 Git、[README](../README.md#开发环境) 要求的 Go、Node.js / npm，以及 tar、zstd。使用含发行标签的仓库检出进行打包。编译不需要 root：
-
-```sh
-bash scripts/build-linux.sh
-# Go 不在 PATH 时：
-# GO=/opt/go/bin/go bash scripts/build-linux.sh
-```
-
-脚本只构建一次前端，然后以 `CGO_ENABLED=0` 交叉编译 Linux amd64 和 arm64，输出：
-
-```text
-bin/worklog-v<版本>-linux-x86_64.tar.zst
-bin/worklog-v<版本>-linux-arm64.tar.zst
-```
-
-版本统一由 `scripts/release-version.sh` 从当前 `HEAD` 可达的最近发行标签获取（`git describe --tags --abbrev=0 --match 'v[0-9]*' HEAD`）。标签使用 `vX.Y.Z` 格式，支持预发行／构建后缀，例如 `v0.2.0-rc.1`；不读取根目录版本文件，也不接受 `VERSION` 环境变量覆盖。没有匹配标签或标签格式非法时直接报错。浅克隆／CI 需获取完整历史和标签；发布流程见 [发布版本](../README.md#发布版本)。发布包及安装目录中的 `VERSION` 仅为脚本自动生成的版本记录，不参与版本选择。
-
-不需要 Windows SDK、目标架构编译器或目标机器上的构建工具。将对应压缩包复制到目标主机，按第 1 节解压安装；**不要直接在源码仓库运行 `scripts/install-linux.sh`**，安装脚本依赖发布包布局。
-
-开发环境中从源码构建并手动启动，可在项目根目录执行：
-
-```sh
-(cd Web && npm ci && npm run build)
-go build -o bin/worklog ./cmd/worklog
-./bin/worklog
-```
-
-打开 `http://127.0.0.1:12450` 即可使用。首次启动会创建 `data/worklog.db`、执行迁移并生成 MCP 令牌文件。需要打包给 Linux 主机部署时，使用上文的 `scripts/build-linux.sh` 生成 Releases 格式发布包；不要直接在源码仓库运行安装脚本。
-
-## 3. 配置与远程访问
-
-首次安装生成使用绝对路径的最小 SQLite 配置，仅监听 `127.0.0.1:12450`。启动时自动创建数据库、执行迁移，并生成 MCP 读写令牌文件；无需额外执行迁移命令。
-
-打开 **http://127.0.0.1:12450**。系统级服务工作目录为 `/var/lib/worklog`，用户级为对应 `data` 目录。所有业务配置仅来自 JSON；相对路径按服务工作目录解析，建议保留绝对路径。
-
-编辑配置后重启：
-
-```sh
-# 系统服务
-sudoedit /etc/worklog/config.json
-sudo systemctl restart worklog.service
-
-# 用户服务（按自己的 XDG 路径调整）
-"${EDITOR:-vi}" ~/.config/worklog/config.json
-systemctl --user restart worklog.service
-```
-
-完整字段见 [部署与配置](DEPLOYMENT.md)。配置包含秘密，不要放进静态目录或版本库。SQLite 数据必须位于本机磁盘，不要使用 NFS / SMB。
-
-远程部署推荐 Nginx / Caddy / Cloudflare Tunnel → 本机 Worklog，外部入口使用 HTTPS。必须另外设置 Worklog 的独立 Basic 密码、写令牌，以及实际域名的 `allowed_hosts` 和 HTTPS `allowed_origins`；代理应保留实际 Host。Cloudflare Access 不替代 Worklog 自身认证。具体示例见 [Nginx HTTPS 反向代理](DEPLOYMENT.md#nginx-https-反向代理)和[身份认证与安全](AUTHENTICATION.md)。
-
-安装脚本不会修改防火墙、开放公网监听、安装代理或生成 TLS 证书。
-
-## 4. 状态、日志和日常维护
-
-系统服务：
-
-```sh
-sudo systemctl status worklog.service --no-pager
-sudo journalctl -u worklog.service -n 100 --no-pager
-sudo journalctl -u worklog.service -f
-sudo systemctl restart worklog.service
-sudo systemctl disable --now worklog.service
-```
-
-用户服务：
-
-```sh
-systemctl --user status worklog.service --no-pager
-journalctl --user -u worklog.service -n 100 --no-pager
-journalctl --user -u worklog.service -f
-systemctl --user restart worklog.service
-systemctl --user disable --now worklog.service
-```
-
-健康检查：
-
-```sh
-curl --fail http://127.0.0.1:12450/healthz
-# 若移除了本机 Host 白名单，指定允许的域名：
-# curl --fail -H 'Host: worklog.example.com' http://127.0.0.1:12450/healthz
-```
-
-修改单元后需执行对应的 `systemctl [--user] daemon-reload` 再重启；仅修改 JSON 不需要 daemon-reload。日志进入 journald，其持久化与轮转由主机配置决定。
-
-启动失败时检查日志中的配置、权限、端口占用和路径问题；触发启动频率限制后，修复问题并执行对应的 `systemctl [--user] reset-failed worklog.service`，再启动。
-
-## 5. 升级与备份
-
-**先备份，再升级。** 解压新版本，用与原安装相同的身份及 XDG 路径重新执行 `install.sh`：
-
-- 保留已有 `config.json`，不自动合并新版本配置。
-- 保留数据库、令牌和数据目录；不会从压缩包注入业务数据。
-- 准备新文件后停止已有服务，再替换二进制和整套前端，更新服务单元并启动。
-- 不在运行中直接覆盖可执行文件，也不混用两个版本的前端资源。
-- 安装脚本会覆盖对应服务单元；自行修改的单元应先备份，持久自定义优先使用 systemd drop-in。
-
-脚本会检查服务是否处于运行状态，但不保证后续运行永不出错，也不自动恢复数据库或回滚失败升级。**数据库迁移可能不可逆，回滚程序不等于回滚数据库。**
-
-系统服务的 SQLite 在线备份示例：
-
-```sh
-sudo -u worklog install -d -m 700 /var/lib/worklog/backups
-sudo -u worklog sh -c 'cd /var/lib/worklog && /opt/worklog/bin/worklog --conf=/etc/worklog backup "/var/lib/worklog/backups/worklog-$(date +%Y%m%d-%H%M%S).db"'
-```
-
-用户服务（默认路径）：
-
-```sh
-mkdir -p ~/.local/share/worklog/data/backups
-~/.local/share/worklog/app/bin/worklog --conf="$HOME/.config/worklog/config.json" \
-  backup "$HOME/.local/share/worklog/data/backups/worklog-$(date +%Y%m%d-%H%M%S).db"
-```
-
-备份目标必须不存在。不要只复制运行中的 `.db`，应将备份另存到其他存储。PostgreSQL 使用专用备份工具，恢复步骤见[备份与恢复](OPERATIONS.md)。
-
-## 6. 卸载与安全边界
-
-使用 `uninstall.sh` 停止并禁用对应服务，删除服务单元和程序目录。系统级不带参数时，分别询问是否删除用户／组和配置／数据，直接回车默认保留；当前用户不带参数时保留配置和数据。`uninstall.sh purge` **不作确认，直接删除配置和数据，系统级还删除 worklog 用户和同名组**。请先备份并检查账户用途，详见[卸载与彻底清理](#c-卸载与彻底清理)。
-
-系统服务启用只读文件系统、隐藏 home、无 capabilities、禁止提权、私有临时目录，只有状态目录可持久写入。若改变数据或令牌路径，需要同步调整目录权限与服务沙箱。用户服务不提供同等文件系统沙箱，它以当前用户权限访问文件，适合个人安装而非安全隔离。
-
-两种服务均使用 `UMask=0077`、异常退出重启和 SIGTERM 优雅退出。系统模式需支持模板中的 systemd 指令，可用 `sudo systemd-analyze verify /etc/systemd/system/worklog.service` 检查。SELinux / AppArmor、容器或受限主机可能需要额外策略。安装脚本不会自动配置这些策略。
+前端使用相对资源路径，Go 的动态配置仍指向 `/api`。部署后实际检查页面、保存和 MCP；本地测试不能代替 HTTPS 代理验收。

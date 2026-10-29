@@ -1,86 +1,56 @@
-# Worklog
+# WorkLog 前端
 
-基于 Vue 3、Vite、Element Plus、Tiptap 和 Monaco 的个人工作台，  
-包含工作日志、任务看板／列表／甘特图、项目与分类管理、个人待办和浅深色主题。
+前端使用 Vue 3、Vite、Element Plus、Tiptap 和 Monaco，提供工作台、任务列表／看板／甘特图、待办和富文本日志，支持浅色与深色主题。
 
-**无需后端即可使用。** 首次打开没有项目、任务、待办或日志，不再加载示例 JSON。  
-六个初始分类和周一至周五工作规则属于默认设置，不是示例业务记录。
+完整项目安装见[项目 README](../README.md)。本文介绍独立前端运行和数据模式；测试与发布流程统一见[开发文档](../docs/DEVELOPMENT.md)。
 
-## 开发、测试与构建
+## 启动与构建
 
-推荐 Node.js 22.22.2+ 或 24.15+（包含组件测试工具的依赖要求）。
+准备 Node.js 24.15+ 和 npm。以下命令在 `Web/` 目录执行：
 
 ```sh
 npm ci
 npm run dev
-npm test                 # Node 单元 + Vue/jsdom 组件测试
+```
+
+打开 Vite 输出的地址。默认 `public/config.json` 为 `{}`，使用浏览器本地数据，不需要后端，也没有示例项目、任务或日志。初始分类和每周工作日规则属于默认设置。
+
+构建并预览：
+
+```sh
 npm run build
 npm run preview
 ```
 
-组件测试使用 `npm run test:components`（可追加 `-- tests/components/文件名.spec.js`）。入口在加载 Vitest / Vue 前固定使用测试模式，不受父进程 `NODE_ENV=production` 影响，保证 `wrapper.emitted()` 事件断言正常；不改变应用构建配置。
-
-`npm run build` 生成完整的 `dist/`，部署时只需这个目录，无需 Node.js、源码、数据库或后端服务。  
-正式部署可使用 Nginx、Caddy 或任何静态 HTTP 服务；本地也可使用：
+`dist/` 是完整静态产物，可交给 Nginx、Caddy 等 HTTP 服务。也可用 Python 本地检查：
 
 ```sh
 python3 -m http.server 12450 --directory dist
 ```
 
-浏览器打开 `http://localhost:12450`。  
-创建持久业务 ID 优先使用 `crypto.randomUUID`，LAN HTTP 下回退到 `crypto.getRandomValues`；  
-若浏览器连安全随机源也不支持，会显示错误而不会生成弱随机业务 ID。  
-构建使用相对资源路径，可部署在站点根目录或 `/worklog/` 等子目录。  
-**不要直接以 `file://` 双击 HTML**：ES modules 和 Monaco workers 需要 HTTP(S) 环境。  
-静态部署不等于 PWA，暂不支持断网首次加载。
+打开 `http://localhost:12450`。不要用 `file://` 双击 HTML，模块和 Monaco workers 需要 HTTP(S)。资源采用相对路径，可部署到 `/worklog/` 等子目录。静态部署不是 PWA，不支持断网首次加载。
 
-## 应用图标
+## 选择数据模式
 
-图标源文件为 `public/favicon.svg`，使用灰白新拟态圆角底板、微拟物手账与紫色燕尾书签。  
-页面优先使用 SVG，`public/favicon.ico` 为兼容格式，两者均随构建复制到 `dist/`。
+### 浏览器本地模式
 
-修改 SVG 后，在已安装 Pillow、Playwright 和 Google Chrome 的环境中运行：
-
-```sh
-python3 ico.py
-```
-
-脚本通过 Chrome 渲染阴影，输出 `public/logo.png`（256px 预览）与包含 16、32、48、64、128、256px 六种尺寸的 `public/favicon.ico`。  
-重新构建即可发布更新。
-
-## 两种数据模式
-
-### 1. 本地模式（默认）
-
-不配置后端时，所有业务读写使用当前浏览器同源的 `localStorage`，不会发起业务 API 请求：
+未设置 `apiBaseUrl` 或设为空字符串时，业务数据保存在当前站点的 `localStorage`，不请求业务 API：
 
 | 存储键 | 内容 |
 | --- | --- |
-| `worklog.v2.dashboard` | 项目及顺序、分类及顺序、任务、待办、顶部工作台文字、工作台版本 |
-| `worklog.v2.entry.YYYY-MM-DD` | 指定日期的 Tiptap JSON 日志、更新时间及版本 |
+| `worklog.v2.dashboard` | 项目、分类、任务、待办、工作台文字及版本 |
+| `worklog.v2.entry.YYYY-MM-DD` | 指定日期的日志、更新时间及版本 |
 | `worklog-theme` | 手动选择的主题 |
 
-数据只属于该浏览器、该站点来源（协议／域名／端口），不提供跨设备同步。清理站点数据、隐私模式退出或浏览器存储故障可能导致数据不可用；  
-重要记录请自行备份。存储读取失败或数据损坏会报错，不会用空数据覆盖原记录；写入失败会回滚界面，保留表单草稿，不显示保存成功。
+数据仅属于当前浏览器和站点来源（协议、域名、端口），不与其他设备或 MCP 共享。清理站点数据、退出隐私模式或存储故障可能丢失记录。项目 ZIP 导出仅包含项目及关联任务、分类，不包含待办或日志，不能代替完整备份。
 
-本次使用新的 `worklog.v2.*` 命名空间，**不再读取旧版 `worklog-dashboard` 和 `worklog.entry.*`**，避免旧示例缓存再次出现。  
-旧键不会被自动删除（其中可能包含用户记录），也不自动导入新存储或上传后端。如需保留旧数据，先手动备份并按新结构校验转换。
+存储损坏或读取失败时显示错误，不以空数据覆盖原记录；写入失败恢复界面并保留表单草稿。旧键 `worklog-dashboard`、`worklog.entry.*` 不再读取，也不会自动删除、转换或上传后端。需要旧数据时先单独备份，再按当前结构转换。
 
-工作日历在两种模式下都读取前端 `public/work-calendar.json`（构建后为 `dist/work-calendar.json`），默认包含 2026 年节假日和调休，不再读取 `worklog.v2.calendar`。
-没有页面配置入口；自定义单双休、节假日或取消节日标记见[工作日历自定义](../docs/WORK_CALENDAR.md)。
+### 后端模式
 
-### 2. 后端模式
+Go 服务提供网页时自动生成公开的 `config.json`，使用同源 `/api` 和服务端业务时区。安装方式见[部署文档](../docs/DEPLOYMENT.md)。Go 不读取磁盘上的 `dist/config.json`。
 
-仓库根目录已提供可运行的 Go / SQLite / PostgreSQL 后端和 MCP Server，配置、认证、备份及部署见 [后端 README](../README.md)。  
-构建本前端后在根目录启动 Go 程序，即可通过 `http://127.0.0.1:12450` 使用同源 `/api`；Go 提供的 `config.json` 会自动选择真实后端。
-在 `Web/` 中执行 `npm run dev` 即可无后端运行：Vite 从 `public/config.json` 提供 `{}` 配置，数据保存在浏览器中。
-开发服务器仅保留 `/api` 代理供后端联调使用；如需后端模式，应将 `public/config.json` 的 `apiBaseUrl` 配置为 `/api` 并启动 Go 后端。
-`npm run build` 与 `npm run preview` 同样使用发布的 `config.json`，默认本地模式。
-需要验证纯本地模式时使用构建后的 preview。
-
-**独立静态部署配置后端：** 编辑 `dist/config.json` 中的 **API 基础 URL（包含 `/api` 等前缀）**，无需重新构建。
-注意 Go 内置静态服务会动态生成 `/config.json`，只输出 `apiBaseUrl` 和 `businessTimezone`，不会读取这个文件；
-Go 部署固定同源 `/api` 并自动传入业务时区，子目录代理约定见 [部署与配置](../docs/DEPLOYMENT.md#子目录部署)。
+独立静态部署需要编辑 `dist/config.json`，无需重新构建：
 
 ```json
 {
@@ -89,118 +59,59 @@ Go 部署固定同源 `/api` 并自动传入业务时区，子目录代理约定
 }
 ```
 
-跨域 URL 仅在部署层已解决认证时可用；CORS 本身不提供登录能力。
+API 基础 URL 必须包含 `/api` 等前缀，可使用以 `/` 开头的站内路径或完整 HTTP(S) URL；不能是相对路径或 `//host`。推荐同源代理。浏览器使用 `credentials: same-origin`，不提供页面填写 Token 或跨域 Cookie 登录；CORS 本身不提供认证。不要把任何密码、Token 或数据库连接串放进公开配置。
 
-用户配置只使用公开的 `config.json`，不读取构建时业务环境变量，也不使用 `.env.local` 或可执行 `config.js` 配置 API。
-`window.WORKLOG_CONFIG` 仅是应用内部载体，不再是部署人员编辑的文件。
-发布的 `config.json` 默认为 `{}`；未设置 `apiBaseUrl` 或显式设置为 `""` 时使用本地模式。
+开发模式只有 `/api` 代理到 `127.0.0.1:12450`，`config.json` 从 `public/` 提供。联调需要暂时修改 `public/config.json` 并启动后端，详见[前端热更新](../docs/DEVELOPMENT.md#前端热更新)。preview 不继承开发代理。
 
-启动入口相对于页面 URL 请求 `./config.json`（支持 `/worklog/` 子目录），
-使用同源凭证、禁用缓存，并设置 5 秒超时；同时并行加载应用 JS/CSS，减少串行等待。
-HTML 只声明轻量 bootstrap 模块入口，应用仍通过动态 import 加载；不要添加第二个静态 main 入口（即使带 async），以免 Vite 合并入口后让应用依赖拖延配置请求和首屏绘制。
-`startupPreloads.js` 在构建后的 HTML 中为 main 及其静态依赖注入 `modulepreload`，为对应 CSS 注入 `preload as="style"`，让浏览器在 bootstrap 执行前就能发现资源；不会预加载 Monaco 等动态功能。
-CSS 提示不是 `stylesheet`，不会阻塞加载界面的首次绘制；后续由 Vite 动态加载器应用样式。预加载使用与 Vite 样式链接一致的匿名 `crossorigin`，以便复用请求。开发模式仅预加载 `/src/main.js`。
-应用模块只导出挂载函数，只有配置读取、校验及资源加载都完成后才挂载，避免首批业务请求使用错误地址。
-启动过程统一显示“正在加载…”，不切换配置／资源阶段文案；配置失败不等待应用资源就显示错误，动态 import 或样式加载失败也会进入启动错误处理。
-`config.json` 是必需发布文件，不存在读取失败回退：
+后端模式不读写本地业务缓存，不自动迁移或同步两种模式的数据；后端故障也不会切回本地模式。移除 API 配置后才能重新访问原本地数据。
 
-- 文件缺失（404/410）、网络失败、超时、其他 HTTP 错误（包括 401/403/5xx）、JSON 损坏、非对象、未知字段、非法 URL 或时区：显示启动错误，不挂载应用，不发送业务 API 请求，不写本地业务数据。
-- 只有成功读取合法配置后才启动；`{}`、省略 API 地址或显式空 API 地址表示本地模式。
+### 配置读取规则
 
-JSON 仅允许 `apiBaseUrl` 和 `businessTimezone` 两个可选字段；不允许注释、尾逗号或密钥。
-修改配置后刷新页面；URL 不能是相对路径、`//host` 或非 HTTP(S) 地址。
-站点自定义 CSP 时需允许 `connect-src 'self'` 读取 JSON 和同源 API；配置跨域 API 时还需允许该 API 来源。
-配置不再需要额外的可执行配置脚本或相应 `script-src` 放行规则（应用模块和首屏主题脚本仍遵循原 CSP 要求）。
+- 页面启动时相对于页面地址读取 `./config.json`，使用同源凭证、禁用缓存，超时为 5 秒。
+- 仅允许 `apiBaseUrl` 和 `businessTimezone` 两个可选字段，不读取 `.env.local`、构建时业务变量或可执行 `config.js`。`window.WORKLOG_CONFIG` 仅是内部载体。
+- 文件缺失、HTTP 错误、JSON 损坏、未知字段、非法 URL／时区都会阻止启动，不发送业务请求、不写本地数据。只有成功读取合法 `{}` 才表示默认本地模式。
+- 修改配置后刷新页面。自定义 CSP 应允许 `connect-src 'self'`；跨域 API 还需允许对应来源。
+- 独立前端的 `businessTimezone` 应与后端一致。未配置时日期标签使用浏览器时区，日志首次日期仍以 `/today` 为准，任务表单默认日期使用浏览器本地日期。
 
-配置后所有业务数据由 API 提供，**不读取本地业务缓存，不自动迁移或同步两种模式的数据，也不会在后端故障时偷偷切回本地模式**。  
-移除配置后可重新使用原有本地数据。
+## 保存与使用限制
 
-品牌 `worklog.` 末尾的圆点仅展示后端健康状态：未配置后端或首次检查尚未完成时保留原色；
-配置后通过 API 基础 URL 下的 `GET /healthz` 检查，成功为墨绿色，连接、认证、数据库或响应格式异常为深红色。
-页面加载时立即检查，每次检查完成后 30 秒再检查；恢复后自动变绿，离开页面停止轮询。
-健康检查与业务请求使用相同的地址配置、同源凭证和 15 秒超时，不读取或写入本地业务缓存。
-**绿点不代表某次业务保存成功，红点也不会触发本地降级或写操作重试。**
+- 项目和分类支持排序。普通管理修改在点击保存后生效，取消丢弃草稿。**删除项目例外**：输入完整名称确认后立即删除项目及全部关联任务，取消管理窗口不会撤销；不会顺带提交其他项目草稿。删除分类将任务移到保存列表的首分类。
+- 任务支持组合筛选、四级优先级和五种卡片色。日期可空，截止不能早于开始。甘特图仅显示有日期的任务，按自然日绘制，单日期视为单日；提供周／月／15 天／30 天视图，不自动排期。拖动状态时可能补填日期。
+- 顶部工作台文字双击编辑，最长 255 个 UTF-16 码元（部分字符占两个码元），失焦／回车保存，Esc 取消。
+- 日志支持二／三级标题、文字格式、列表、引用、代码、分隔线和撤销／重做。HTML 源码经编辑器过滤后转成 Tiptap JSON，不直接存 HTML；不支持的颜色会被移除并提示。切换日期或放弃草稿后重置撤销历史。
+- 日志每 10 秒检查自动保存，失焦也保存，只提交有变化的正文。源码未应用时暂停自动保存。保存期间的新输入留待下次保存，切换日期保留内存草稿，但关闭页面后不能保证恢复。
+- 任意日志写入失败都会暂停该日期的自动重试。普通错误可手动重试；版本冲突时先复制草稿，再确认放弃并重新加载。工作台冲突时也应先保留草稿，再刷新读取最新数据，不反复覆盖提交。
+- 工作台写入期间阻止重复交互。任务／项目／分类失败保留弹窗，待办／拖动失败恢复原状态。请求超时 15 秒，不自动重试写操作；超时可能发生在服务端提交之后。
+- 跨午夜刷新今天标签与甘特图，但不会把正在编辑的日志切换到新一天。没有多设备离线同步或自动冲突合并。
 
-当前已接入的接口（基础 URL 后追加）：
+后端字段、容量限制和版本规则见 [REST API](../docs/REST_API.md)；前端使用的协议见[工作台快照](docs/API工作台.md)和[工作日志](docs/API工作日志.md)。
 
-| 方法 | 路径 | 用途 |
-| --- | --- | --- |
-| GET | `/healthz` | 检查后端认证与数据库可用性，成功返回 `{ ok: true }` |
-| GET / PUT | `/dashboard` | 读取／原子保存带 `revision` 的完整工作台 |
-| GET | `/today` | 读取今天日志 |
-| GET / PUT | `/worklog/:date` | 读取／按版本保存指定日期日志 |
-| GET | `/worklog/dates` | 返回全部有内容日志的日期 `{ dates: [] }` |
+### 健康状态与工作日历
 
-请求直接收发 JSON，不使用 `{ data: ... }` 包装。日志保存使用标准 `PUT`，不再使用 `PUSH`。  
-后端工作台完整快照容量预算为 8 MiB（按服务端 JSON 编码计），所有写入口统一检查；超限会返回错误并保留原数据。
+品牌 `worklog.` 末尾的点显示后端健康状态：未配置后端或尚未完成检查时为原色，检查成功为墨绿色，连接／认证／数据库或响应异常为深红色。启动时检查，此后每次检查完成 30 秒再检查，离开页面停止轮询。请求为 API 基础地址下的 `GET /healthz`。
 
-接口字段和冲突处理见 [HTTP API 说明](docs/API说明.md)及其[工作台](docs/API工作台.md)、[工作日志](docs/API工作日志.md)文档；后端额外提供共享同一数据的细粒度 REST / MCP 接口，但 Vue 当前仍使用完整快照保存。
+绿点不代表某次保存成功，红点也不触发本地降级或写入重试。
 
-客户端请求超时为 15 秒，不自动重试写操作。  
-使用同源凭证；跨域后端需要正确配置 CORS，当前不支持跨域 Cookie 登录或页面填写 Token，因此浏览器工作台正式推荐同源代理及部署层认证；  
-配置跨域 URL 并不自动建立认证渠道。独立静态部署可配置 `businessTimezone` 与后端保持一致，  
-未配置时日期标签使用浏览器时区，日志初次日期仍采用 `/today`。后端故障时主工作台显示错误与重新加载入口；  
-日历统一加载并向日期面板和甘特图共享降级、错误与重试状态，日志日期标记故障不阻止日志编辑。
+两种模式都读取前端的 `work-calendar.json`，不使用日历 API 或旧 `worklog.v2.calendar` 缓存。加载失败显示重试入口，暂按周一至周五工作显示，不阻止任务和日志编辑。默认年份、自定义规则和更新方法见[工作日历自定义](../docs/WORK_CALENDAR.md)。
 
-## 主要行为
+## 开发者参考
 
-- 项目／分类管理支持拖动排序，普通修改在弹窗点击保存后生效，取消会丢弃这些草稿修改。删除项目前需输入完整项目名称进行二次确认（前端校验），确认后立即删除项目及其所有任务，无需点击保存，取消项目管理也不会撤销删除；其他未保存的项目修改仍保留为草稿，不随删除提交。删除分类则将任务移至保存列表第一个分类，不删除任务。
-- 分类名称 trim 后非空、最长 40、不区分大小写唯一，至少保留一个分类。默认开发／临时／个人／产品／设计／调研，新任务默认开发（不存在时用首分类）。
-- 任务支持项目、搜索、分类、高优先级组合筛选、四级优先级和五种卡片色。拖动修改项目和状态，必要时补填开始／截止日期。
-- 起止日期可空，均填时截止不得早于开始。甘特图只显示有日期的任务，单日期视为单日，区间含首尾，按自然日绘制，不自动排期。提供周／月／15 天／30 天视图和前后翻页。
-- 顶部文字双击编辑，最长 255 码元，失焦／回车保存、Esc 取消。
-- 日志支持二／三级标题、粗斜体、下划线、删除线、颜色、列表、引用、代码、分隔线和撤销／重做。源码编辑通过 Tiptap 过滤 HTML 并转换为 JSON，不直接保存 HTML。源码导入与粘贴会移除不受支持的颜色并提示，保留正文和其他格式。加载日期或确认放弃草稿时重置撤销历史，不能撤销到其他日期。
-- 日志每 **10 秒**检查自动保存，失焦也保存，只提交有改动的文档。任何写入失败都会暂停该日期的自动重试；普通错误可手动重试，版本冲突必须先复制草稿，再确认放弃草稿并重新加载最新版本。保存中继续输入的新内容保留到下次保存；切换日期保留内存草稿，错误不串到其他日期，离开有未保存内容的页面会提示。源码未应用前暂停自动保存。
-- 工作台写入期间阻止重复交互并显示保存状态；任务、项目和分类保存失败时弹窗保持打开，待办／拖动失败恢复原数据。
-- 后端并发更新使用工作台 `revision` 和日志 `version` 检查。冲突不会自动覆盖服务端；请先复制未保存草稿，日志可使用明确确认的“重新加载”入口，工作台可刷新页面读取最新数据，必要时重新应用修改。多设备协作和离线同步不在当前范围内。页面跨午夜会刷新今天标签和甘特图，并提示仍在编辑的日期，不会自动把正在编辑的日志切到新一天。
+测试命令、一次性后端和 Playwright 使用方式见[开发与测试](../docs/DEVELOPMENT.md#前端与真实后端联调)。集成测试会修改数据，绝不能指向个人或生产实例；不要与 Playwright 共用测试实例或端口。
 
-### 后端集成与浏览器测试
+| 文件 | 职责 |
+| --- | --- |
+| `src/bootstrap.js`、`src/runtimeConfig.js`、`src/main.js` | 并行加载公开配置和应用资源，全部成功后挂载；失败时停止启动 |
+| `startupPreloads.js`、`vite.config.js` | 预加载应用静态 JS／CSS，保留轻量启动入口；升级 Vite 后检查生成 HTML 和请求复用 |
+| `src/api/client.js`、`src/api/index.js` | HTTP、错误处理、本地／后端适配及静态日历加载 |
+| `src/api/worklog.js`、`src/worklogSaving.js` | 按日期读写、正文与版本绑定、保存去重 |
+| `src/dashboard.js`、`src/workCalendar.js` | 数据校验、筛选、日期和关联变更 |
+| `src/theme.css`、`src/style.css` | 主题变量、布局和共享样式 |
+| `tests/fixtures/` | 测试数据，不进入发布产物 |
 
-以下命令均在 `Web/` 下运行，需要 Go。`npm test` 不含真实后端与浏览器测试。
+启动入口只使用 bootstrap，不要另加静态 main 入口。预加载不包含 Monaco 等动态功能，CSS 使用 `preload as="style"` 而非阻塞加载界面的 stylesheet。应用资源失败与配置失败都应进入启动错误处理。
 
-浏览器 smoke 使用真实 Go 服务和一次性 SQLite 数据库：
+Monaco 在首次打开源码弹窗时按需加载。`src/monacoFeatures.js` 注册所需功能，`src/monacoWorkers.js` 配合 Vite 插件保留独立 HTML／editor workers，避免隐式全量注册。升级后应检查 worker 协议、HTML 补全／格式化、主题和保存。
 
-```sh
-npm run build
-npx playwright install chromium
-npm run test:e2e
-# 可选：npx playwright install webkit
-# WORKLOG_TEST_WEBKIT=1 npm run test:e2e
-```
+应用图标源为 `public/favicon.svg`。在已安装 Pillow、Playwright 和 Google Chrome 的环境中执行 `python3 ico.py`，生成 `public/logo.png` 和多尺寸 `public/favicon.ico`，再重新构建。
 
-Playwright 自动调用 `tests/start-backend.js`：在系统临时目录创建数据库、权限为 `0600` 的 JSON 配置和 Go 可执行文件，
-使用 `--conf` 启动，退出时删除临时目录。不设置或读取 WORKLOG 业务环境变量；父进程即使带有业务环境变量，也由 `--conf` 忽略。
-测试工具变量可保留：`WORKLOG_E2E_PORT` 修改默认端口 `22450`，`WORKLOG_CHROMIUM_EXECUTABLE` 指定已安装的 Chrome，
-`WORKLOG_TEST_WEBKIT=1` 增加 WebKit 项目，`CI` 控制失败重试。
-
-适配器集成测试需要单独的全新数据库，**不要指向个人或生产后端**。在两个终端运行（端口须一致）：
-
-```sh
-# 终端 1：会等待运行，结束后按 Ctrl+C 清理临时资源
-node tests/start-backend.js
-# 终端 2：仅测试工具读取此 URL，不是业务配置环境变量
-WORKLOG_TEST_API_URL=http://127.0.0.1:22450/api npm run test:backend
-```
-
-集成测试会修改数据；再次运行前应重启临时后端。不要与 Playwright 共用同一实例或端口。
-
-## 代码导航与 review
-
-- `src/bootstrap.js`、`src/runtimeConfig.js`、`src/main.js`：并行读取公开 JSON 与加载应用资源；配置校验及资源加载完成后才显式挂载，任一路失败均停止启动。
-- `startupPreloads.js`、`vite.config.js`：提前发现应用静态 JS/CSS，保留轻量 bootstrap 和非阻塞首屏；构建插件依赖 Vite 的 chunk CSS 元数据，升级 Vite 后需检查生成的 HTML 预加载链接与浏览器请求复用。
-- `src/api/client.js`：运行时地址校验、统一 HTTP、错误及超时处理。
-- `src/api/index.js`：工作台的本地／后端适配及静态日历 JSON 加载。
-- `src/api/worklog.js`：日志读写、显式版本参数及日期标记，不依赖静态文件。
-- `src/dashboard.js`、`src/workCalendar.js`：结构校验、筛选、日期及关联变更规则。
-- `src/worklogSaving.js`：日期正文与基准版本绑定、保存去重及保存期间继续编辑。
-- `src/theme.css`：浅深色语义变量；`src/style.css`：布局和共享控件。
-- `tests/fixtures/`：仅用于回归测试的固定数据，不属于发布资源，不会进入 `dist/`。
-
-### Monaco 按需注册
-
-HTML 源码弹窗首次打开时才加载 Monaco。`src/monacoFeatures.js` 注册最小功能；  
-`vite.config.js` 仅替换 Monaco HTML worker 管理器的内部入口，使用 `src/monacoWorkers.js` 避免隐式全量注册，保留独立 HTML／editor workers。  
-升级 Monaco 时必须运行完整测试，检查 worker 协议、源码弹窗打开、HTML 补全／格式化、主题切换和保存。
-
-视觉与浏览器回归建议覆盖浅深色 1440、1280、768、390px，任务拖动、表单保存失败、日志快速切日及源码编辑。  
-自动测试不替代这些真实浏览器交互检查。
+业务 ID 优先使用 `crypto.randomUUID`，否则使用 `crypto.getRandomValues`；缺少安全随机源时显示错误，不生成弱随机 ID。视觉检查建议覆盖浅深色、1440／1280／768／390px、拖动、保存失败、日志快速切日和源码编辑；自动测试不代替这些交互检查。

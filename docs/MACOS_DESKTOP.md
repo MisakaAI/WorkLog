@@ -1,138 +1,135 @@
 # macOS 菜单栏桌面端
 
-Worklog 使用原生 AppKit `NSStatusItem` 菜单栏和 Go 本地服务，在系统默认浏览器打开嵌入的 Vue 界面。菜单栏、HTTP、数据库连接均在一个进程内，不使用 Electron、WebView 或独立业务后端进程。关闭浏览器不会退出服务。
+WorkLog 以单进程运行原生 AppKit 菜单栏、本地 HTTP 和数据库服务，在默认浏览器显示界面；不使用 Electron 或 WebView，没有 Dock 图标，关闭浏览器不会退出服务。
 
-## 在 Mac 上构建 .app 和 DMG
+## 下载安装与首次使用
 
-需要 macOS 13+（与当前 Go 工具链的最低版本一致）、Xcode Command Line Tools（`xcode-select --install`）、`go.mod` 指定的 Go、Node.js 24.15+、npm、Git 仓库及发行标签，以及下载依赖的网络。AppKit 桥接需要 CGO 和 Apple SDK，不能用普通 Linux 交叉编译代替。
+1. 从 [GitHub Releases](https://github.com/MisakaAI/WorkLog/releases) 下载 `worklog-v<版本>-macos-arm64.dmg`（Apple Silicon）或 `worklog-v<版本>-macos-x86_64.dmg`（Intel）。项目目标系统为 macOS 13+；Apple Silicon 运行 x86_64 版需要 Rosetta。
+2. 将镜像中的 `worklog.app` 拖入 `/Applications`（或 `~/Applications`），推出镜像后启动，无需 Go 或 Node.js。
+3. 首次初始化数据库及迁移后自动打开浏览器；关闭页面后用菜单“打开 Worklog”进入。异常查看 `worklog.log`。
 
-```sh
-bash scripts/build-macos.sh
-# 默认构建当前 Mac 架构；也可使用 Apple SDK 构建另一架构：
-ARCH=arm64 bash scripts/build-macos.sh
-ARCH=amd64 bash scripts/build-macos.sh
-# Go 不在 PATH 时：GO=/path/to/go bash scripts/build-macos.sh
-```
+发行流程不提供开发者身份签名或公证。下载后可能需在“隐私与安全性”中允许打开，请先核对来源；Apple Silicon 链接器的临时签名不等于身份签名或公证。
 
-应用目录固定为 `bin/worklog.app`，安装镜像为 `bin/worklog-v<版本>-macos-arm64.dmg` 或 `bin/worklog-v<版本>-macos-x86_64.dmg`。例如当前发行标签为 `v0.2.0-rc.1` 时，arm64 镜像名为 `worklog-v0.2.0-rc.1-macos-arm64.dmg`，镜像中的应用仍名为 `worklog.app`。应用为本次选定的单一架构；构建另一架构前需先移走 `bin/worklog.app`。
+默认 `127.0.0.1:0` 由系统分配空闲端口，浏览器使用实际 URL。完整退出后端口可能改变；MCP 客户端需更新 URL，或配置固定回环端口。
 
-脚本复用 `scripts/release-version.sh`，版本取 HEAD 可达的最近发行标签，不接受 `VERSION` 覆盖；规则见 [发布版本](../README.md#发布版本)。完整 Git 版本记在 `Info.plist` 的 `WorklogReleaseVersion`，标准 Bundle 版本字段使用对应的数字版本。
+## 菜单与日常操作
 
-脚本执行 `npm ci`、Vue 生产构建和 `CGO_ENABLED=1 go build -tags desktop`，将前端、Monaco workers、时区和迁移嵌入可执行文件，再生成 `Info.plist`（`LSUIElement=true`，无 Dock 图标）。应用图标复用 `Web/public/logo.png`，由 macOS 自带的 `sips`／`iconutil` 生成包含标准及 Retina 尺寸的 `Worklog.icns`，通过 `CFBundleIconFile` 声明，供 Finder 等系统界面显示。菜单栏使用系统模板图标，适应深浅色。目标电脑无需 Go 或 Node.js。两种架构分别打包，不生成 universal app；Apple Silicon 运行 x86_64 版本需要 Rosetta。
+| 实际菜单文字 | 行为 |
+| --- | --- |
+| 打开 Worklog | 打开现有服务页面，不另建服务。 |
+| ● 服务运行中 | 不可点击；还会显示启动、重启、备份、异常或停止状态。 |
+| 导入备份… / 导出备份… | 选择文件／目录，执行下述 SQLite 恢复／备份。 |
+| 登录后启动 | 默认关闭；勾选后在当前用户图形登录时静默启动，不自动打开浏览器。 |
+| 重启服务 | 排空 HTTP 后重启监听，复用数据库、业务、认证及端口；不打开浏览器，重复点击合并。 |
+| 退出 Worklog | 停止 HTTP 并等待请求清理，再释放数据库、菜单栏与锁。 |
 
-DMG 使用 macOS 自带的 `hdiutil` 创建为压缩、只读的 UDZO 镜像，无需 Python 或第三方打包依赖。镜像包含 `worklog.app` 和指向 `/Applications` 的快捷链接；打开镜像，将应用拖入 Applications，推出镜像后从 Applications 启动。也可将 `.app` 直接复制到 `~/Applications`。
+**“重启服务”不重载配置。** HTTP 服务对象已创建后，即使首次绑定失败，修改 JSON 也必须完整退出再启动；仅对象尚未创建（配置／数据库初始化失败）时重试才重新加载。异常时菜单栏保留，可排查后重试；不会打开未就绪或被其他进程占用的端口。
 
-构建先写入临时目录，镜像生成并通过 `hdiutil verify` 后才发布 `.app` 与 `.dmg`；如果同名产物已存在会报错，请先移走旧产物。需要仅打包已有应用时可执行：
+Finder 重复打开或直接重复运行可执行文件，均通知已有实例打开页面；后者使用文件锁和私有通知标记，不另开 IPC 网络端口。单实例按用户数据目录区分，与应用名、版本、`--conf` 无关；新参数不切换已有配置。退出中重开可能需稍后重试；进程死亡后内核释放锁，**不要删除锁文件**。
 
-```sh
-bash scripts/create-macos-dmg.sh bin/worklog.app bin/worklog-v0.2.0-rc.1-macos-arm64.dmg
-```
+重启／退出前等待页面保存；程序不会关闭标签页或保存未提交编辑。HTTP 优雅关闭 15 秒超时后断开连接，仍等待请求清理，总耗时可能更长；浏览器操作不阻塞退出。支持 SIGINT／SIGTERM，注销／关机请求清理但系统可强制终止。
 
-单独打包命令不修改应用，也不判断版本和架构，调用者应确保文件名与实际应用一致。此阶段不提供签名或公证流程；通过网络分发后 macOS 可能要求在“隐私与安全性”中允许打开。Apple Silicon 链接器可能生成运行所需的临时签名，它不代表开发者身份签名或公证。
+## 数据、配置与安全
 
-## 菜单与生命周期
+工作目录固定在当前用户的 Application Support，与 Finder 启动位置无关：
 
 ```text
-打开 Worklog
-────────────────
-● 服务运行中          （不可点击）
-────────────────
-导入备份…
-导出备份…
-────────────────
-✓ 登录后启动
-────────────────
-重启服务
-退出 Worklog
+~/Library/Application Support/WorklogDesktop/
+  data/worklog.db       # SQLite 数据库（运行时还可能有 WAL 等文件）
+  data/mcp-token        # MCP Bearer 令牌
+  worklog.log           # JSON 日志
+  worklog.log.1         # 启动时发现日志达到 5 MiB 后轮转的旧日志
+  config.json           # 可选；也可能由导入备份创建
+  .instance.lock        # 持久锁文件，请勿删除
+  .open-request         # 重复启动的临时通知标记
 ```
 
-- 首次启动完成数据库初始化和 HTTP 监听后，自动打开默认浏览器；URL 使用实际绑定地址。默认仅监听 `127.0.0.1:0`，由系统分配空闲端口。
-- “打开 Worklog”只打开现有服务页面。重复双击 `.app` 时，Finder 的 reopen 事件会打开页面；直接重复运行可执行文件时，通过文件锁识别已有实例，并写入私有目录中的空通知标记，已有实例约 200 毫秒内处理。启动期间的通知保留、合并；不会另开服务或 IPC 网络端口。
-- 单实例按用户数据目录区分，与 app 名称、版本或 `--conf` 无关。已有实例运行时，新启动的配置参数不会切换它的配置。锁文件保留在磁盘，进程死亡后内核自动释放锁；无需手工删除锁文件。正在退出时再次启动可能需要等退出完成后重试。
-- 状态显示启动中、运行中、重启中、异常或已停止。服务初始化或端口绑定失败时保留菜单栏，可修复问题后重启；不打开未就绪或由其他进程占用的端口。
-- “重启服务”先优雅关闭 HTTP、排空请求，再启动监听；复用数据库、业务服务、认证及已绑定端口，不自动打开浏览器。多次点击合并。服务已成功初始化后，修改配置需要完整退出再启动；初始化失败时重启会重试加载配置。
-- “退出 Worklog”先取消启动／运行，停止 HTTP（15 秒优雅超时后关闭连接，继续等待请求清理），再释放数据库和菜单栏、单实例锁。浏览器打开操作在独立队列执行，不阻塞服务重启和退出。终端直接运行时也处理 SIGINT／SIGTERM。注销／关机由 AppKit 请求异步清理，但系统仍可强制终止进程。
+日志仅启动时轮转，运行中持续增长。配置优先级：`--conf` 文件或目录 → 上述 `config.json` → 桌面默认值；不读取业务环境变量或 `.env`。先退出已有实例，再指定配置启动：
 
-退出或重启前请等待页面保存完成。退出不会强制关闭浏览器标签页，也不能保存尚未提交到服务的编辑。
+```sh
+open "/Applications/worklog.app" --args --conf "/absolute/path/config.json"
+```
 
-## 登录后启动与删除应用
+`--conf` 相对路径在切换目录前解析；JSON 内相对数据／令牌路径以桌面数据目录为准。沿用 CLI 的 JSON、身份、时区、认证及 SQLite／PostgreSQL 格式；复用已有数据库请用绝对路径，先停其他写入实例并备份。启动执行必要迁移，不主动导入或清空其他数据库。见 [CLI 与维护流程](OPERATIONS.md)。
 
-“登录后启动”默认关闭。先将 `worklog.app` 安装到 `/Applications` 或 `~/Applications`，再在菜单中勾选。应用会为当前用户创建以下 LaunchAgent，下一次图形登录时启动菜单栏和本地服务，不自动打开浏览器：
+### 备份与恢复
+
+- **导出**：在线一致性备份生成 `worklog-backup-时间-UUID.db`，包含已提交 WAL 数据并检查完整性与外键，不覆盖文件、不停服务。备份含私人数据，需权限受控并另存独立介质。
+- **导入前**：保存编辑，停止同库其他 HTTP／stdio 写入进程，只选独立备份而非使用中的数据库。外部修改过配置时先完整重启，以免覆盖未生效设置。
+- **导入**：排空本进程 HTTP、关库，在当前数据库目录恢复为新的 `worklog-restored-时间-UUID.db`。迁移及完整性验证后原子更新 JSON 的 `db_dsn`，再启动服务；无配置时在数据目录创建 `config.json`。保留原库和其他设置，端口可能改变，需重新打开页面核对任务与日志。
+- **回退**：未切换配置时失败会尝试恢复原服务；切换后启动失败可重试。手动回退需退出并把 `db_dsn` 改回原库。菜单仅支持 SQLite；PostgreSQL 用 `pg_dump`／`pg_restore`，见[备份与恢复](OPERATIONS.md)。
+
+### 权限与本地安全边界
+
+- 新目录 `0700`，数据库、令牌、日志及锁文件 `0600`。数据树需当前用户持有且无组／其他用户权限；符号链接、特殊文件、扩展 ACL 均拒绝，不自动修复权限。
+- 使用本机文件系统，默认令牌原子发布需要硬链接。数据目录外的数据库、令牌、配置及其目录权限／ACL 由用户负责。
+- `addr` 仅允许 `127.0.0.1`；保留 Basic／Bearer、Host／Origin／Fetch Metadata、静态白名单和请求限制，不向浏览器注入令牌。仅可信回环且无 Basic 密码时免密；**本机 HTTP 不隔离其他本地程序**，共享电脑建议设至少 8 字节 `basic_password`。
+- 默认不信任 Vite Origin，不扩展显式可信名单；自定义 `allowed_hosts` 保留 `127.0.0.1`。动态 `/config.json` 指向 `/api`，不用浏览器本地存储模式。
+- 忽略 `static_dir`，始终嵌入前端；更新前端或 `Web/public/work-calendar.json` 必须重建。见[身份认证与安全](AUTHENTICATION.md)。
+
+## 升级、登录后启动与卸载
+
+升级前导出备份、保存 JSON，退出后替换 `.app`，启动并核对数据。不提供自动更新；旧应用不保证兼容已迁移数据，回退需备份恢复。
+
+将应用安装到 `/Applications` 或 `~/Applications` 后再勾选“登录后启动”。它为当前用户创建 LaunchAgent，无需管理员权限：
 
 ```text
 ~/Library/LaunchAgents/io.github.misakaai.worklog.desktop.plist
 ```
 
-采用用户 LaunchAgent，以兼容当前未提供身份签名的发行方式；不需要管理员权限。注册保存应用可执行文件的绝对路径和显式配置参数，通过 `--autostart` 静默启动；`KeepAlive=false`，退出应用后不会自动拉起。登录触发的重复进程静默退出，手动重复启动仍会打开已有实例页面。菜单勾选反映当前应用／配置对应的注册文件；系统“登录项与扩展”中的限制可能独立阻止启动。修改系统设置后，应在系统设置中允许运行。
+注册保存可执行文件／配置绝对路径，以 `--autostart` 静默启动；`KeepAlive=false`，退出不自动拉起。登录重复进程静默退出，手动重复启动则打开页面。菜单勾选反映路径是否匹配；系统“登录项与扩展”可独立阻止启动。
 
-只读 DMG 和 App Translocation 中的应用不能启用此选项。注册后移动或重命名应用会使原路径失效，应在新位置重新勾选；更改显式配置路径后也需重新注册。取消勾选会删除此应用的注册文件，不影响当前运行的服务；下一次登录不再启动。
+只读 DMG／App Translocation 中不能启用。移动、重命名或更换配置路径后需重新勾选；取消勾选只删除注册文件，不停当前服务，系统记录可能留到注销，但下次登录不再通过该文件启动。
 
-**删除 `.app` 不会自动删除登录启动配置，也不会删除用户数据。** 建议先取消“登录后启动”，再退出并删除应用。如果已删除应用，可手动删除注册文件：
+**删除 `.app` 不会删除登录启动配置或用户数据。** 卸载前先取消“登录后启动”，退出后再删除应用。若应用已删除，可手动删除注册文件：
 
 ```sh
 rm -f "$HOME/Library/LaunchAgents/io.github.misakaai.worklog.desktop.plist"
 ```
 
-删除注册文件后，当前登录会话的系统记录可能保留到注销；下一次登录不会再通过该文件启动。应用路径不存在时启动会失败，因为未启用 KeepAlive，不会不断重启。数据仍保留在下述 Application Support 目录，可按需单独备份、清理。
+路径失效不会不断重试。确认备份后才单独清理数据目录。
 
-## 菜单备份与恢复
+## 在 Mac 上构建 .app 和 DMG
 
-- “导出备份…”选择目录后，通过现有 SQLite 在线备份逻辑生成 `worklog-backup-时间-UUID.db` 并验证完整性；服务继续运行，不直接复制使用中的数据库，也不覆盖同名文件。备份含私人数据，请妥善保管。
-- “导入备份…”选择独立的 `.db` 备份并确认后，先排空 HTTP 请求、关闭数据库，再恢复到新的 `worklog-restored-时间-UUID.db`，执行迁移和完整性验证，最后原子更新配置并启动服务。原数据库保留，其他配置字段和认证设置保留。导入后重新打开 Worklog 页面，检查任务与日志。
-- 验证或配置切换失败时不切换原数据库，并尝试恢复原服务；服务启动失败可从菜单重试。配置文件已在外部修改时，请完整退出再启动后导入，避免覆盖尚未生效的设置。
-- 导入前先保存页面编辑，并停止使用相同数据库的其他 HTTP／stdio 写入程序；不要把仍在使用中的数据库当作独立备份导入。此流程沿用 Windows 桌面版的备份／恢复实现。
-- 菜单备份仅支持 SQLite。PostgreSQL 请使用 `pg_dump`／`pg_restore`，详见 [备份与恢复](OPERATIONS.md)。
-
-## 数据、配置与安全
-
-数据默认位于当前用户的 Application Support，工作目录固定于此，与 Finder 启动位置无关：
-
-```text
-~/Library/Application Support/WorklogDesktop/
-  data/worklog.db       # SQLite、WAL、迁移
-  data/mcp-token        # 原有 Bearer 令牌
-  worklog.log           # JSON 日志
-  worklog.log.1         # 下次启动达到 5 MiB 时轮转
-  config.json          # 可选，用户自行创建
-  .instance.lock       # 持久锁文件，请勿删除
-  .open-request        # 重复启动时的临时通知标记
-```
-
-新目录使用 `0700`，数据库、令牌、日志及锁文件使用 `0600`。启动前检查现有数据树：必须由当前用户持有、没有组／其他用户权限，且不含符号链接、特殊文件或扩展 ACL；发现不安全权限会报错，不擅自修改已有数据。请使用本机文件系统；令牌的原子发布沿用硬链接机制。日志仅在启动时轮转，长时间运行会继续增长。
-
-默认读取上述目录的 `config.json`，不存在时使用现有 `config.LoadDesktop` 默认值，不读取业务环境变量或 `.env`。也可显式指定 JSON 文件或目录：
+准备 macOS 13+、Xcode Command Line Tools（`xcode-select --install`）、`go.mod` 指定的 Go、Node.js 24.15+／npm、Git 仓库与标签及联网环境。**AppKit 需要 CGO 和 Apple SDK，不能在普通 Linux 交叉构建。** 版本见 [DEVELOPMENT：版本与标签](DEVELOPMENT.md#版本与标签)。
 
 ```sh
-"/Applications/worklog.app/Contents/MacOS/Worklog" --conf "/absolute/path/config.json"
-# 或通过 LaunchServices 首次启动并传参：
-open "/Applications/worklog.app" --args --conf "/absolute/path/config.json"
+bash scripts/build-macos.sh
+# 默认当前 Mac 架构；也可使用 Apple SDK 构建另一架构：
+ARCH=arm64 bash scripts/build-macos.sh
+ARCH=amd64 bash scripts/build-macos.sh
+# Go 不在 PATH 时：GO=/path/to/go bash scripts/build-macos.sh
 ```
 
-显式 `--conf` 的相对路径在切换工作目录前解析；配置内部相对数据库／令牌路径以 Application Support 中的 Worklog 目录为准。显式配置在该目录之外的数据、令牌和配置文件时，其目录权限与 ACL 由用户负责。沿用原有 SQLite／PostgreSQL 配置和数据格式，不会自动迁移、覆盖或清空其他版本数据；复用已有数据库前先关闭其他写入实例并备份。SQLite 可使用下述菜单导入／导出；其他维护方式见 [CLI 与维护流程](OPERATIONS.md)。
+产物为 `bin/worklog.app` 及 `bin/worklog-v<版本>-macos-arm64.dmg` 或 `macos-x86_64.dmg`，不生成 universal app。**同名 `.app`／DMG 已存在会报错，换架构前先移走产物，不能直接连续覆盖构建。**
 
-安全行为与 Windows 桌面版相同：仅允许 `127.0.0.1` 监听；忽略磁盘 `static_dir`，始终提供嵌入资源；保留 Basic／Bearer、Host／Origin／Fetch Metadata、安全路径白名单和请求限制；不向浏览器注入 MCP 令牌，不新增 Vite 开发 Origin 信任。本机免密条件不变，本机 HTTP 不隔离同一电脑的其他程序，共享电脑建议配置 `basic_password`（至少 8 字节）。动态端口在完整退出后可能改变，MCP 客户端需更新 URL，或显式配置固定回环端口。
+脚本执行 `npm ci`、前端构建及 `CGO_ENABLED=1 go build -tags desktop`，嵌入前端、Monaco workers、时区和迁移。macOS 13 下限由 `MACOSX_DEPLOYMENT_TARGET=13.0`／`LSMinimumSystemVersion=13.0` 声明，仍需实机验证；`WorklogReleaseVersion` 记录完整版本，标准 Bundle 字段用数字版本。
 
-## 测试与待验收
+`hdiutil` 创建含应用与 `/Applications` 链接的压缩只读 UDZO 镜像，验证后才发布临时目录中的产物。仅打包已有应用（替换版本／架构）：
+
+```sh
+bash scripts/create-macos-dmg.sh bin/worklog.app bin/worklog-v0.2.0-rc.1-macos-arm64.dmg
+```
+
+该命令不修改应用或核对版本／架构，调用者负责文件名一致。
+
+## 验证清单
+
+以下待执行，不代表已运行。用独立测试账号、临时配置和数据库，避免个人数据及登录项。在 Mac 仓库根目录运行：
 
 ```sh
 go test -race ./...
-# 先生成 Web/dist，再测试实际桌面入口；不会打开菜单或浏览器：
-cd Web && npm ci && npm run build
-cd ..
-CGO_ENABLED=1 go test -race -tags desktop ./cmd/worklog-desktop ./internal/desktop ./internal/app ./internal/config ./internal/transport/...
-go vet -tags desktop ./cmd/worklog-desktop ./internal/desktop
-# 只读挂载安装镜像，核对应用名、版本、架构、图标和 Applications 链接：
+(cd Web && npm ci && npm run build)
+CGO_ENABLED=1 go test -race -tags desktop ./...
+CGO_ENABLED=1 go vet -tags desktop ./...
+# 构建后，只读挂载镜像，核对版本、架构、图标和 Applications 链接：
 bash scripts/test-macos-dmg.sh bin/worklog-v0.2.0-rc.1-macos-arm64.dmg
 ```
 
-macOS 专属自动测试覆盖并发单实例选举、跨进程通知、启动前通知保留、关闭及异常退出后重新获得锁、危险锁文件、私有目录／符号链接／ACL、URL 拒绝、服务失败重试、取消启动，以及重启后数据／令牌／认证／端口保留。新增测试覆盖登录注册的幂等开关、plist 参数转义及系统解析、私有权限／危险路径拒绝、删除应用后注册仍保留、静默登录与重复启动，以及 SQLite 导出／导入往返、原库保留、认证／配置保留、失败回退和外部配置修改拒绝。登录与备份测试仅使用临时 HOME／数据库，不注册真实用户登录项。现有 HTTP 与安全回归测试继续适用。
+替换实际镜像名；检查脚本不安装或启动应用。PostgreSQL 跳过不算通过；自动测试／交叉架构构建不能替代实机验收：
 
-DMG 打包已在 macOS arm64 实际执行：arm64 与 x86_64 镜像均通过 `hdiutil verify` 和只读挂载检查，确认内含 `worklog.app`、对应版本和架构的可执行文件、应用图标及指向 `/Applications` 的链接。检查脚本也已加入 macOS CI；未完成 Finder 拖拽安装的图形交互验收。
-
-本次实现已在 macOS 27 arm64、Go 1.27.3 上通过 `go test -race ./...`、`go test -race -tags desktop ./...`、`go vet -tags desktop ./...`，完成 arm64／x86_64 `.app` 构建、plist 校验，以及 Windows 桌面入口和 Linux CLI 交叉构建。使用一次性临时 HOME 启动实际 arm64 应用，确认 AppKit 启动、默认浏览器请求本地页面、重复运行通知原实例（仍只有一个 HTTP 服务），以及 SIGTERM 后 HTTP／进程清理。测试未访问个人 Worklog 数据。
-
-新增功能已在同一 macOS arm64 环境完成自动测试；实际 arm64 应用以临时 HOME 和 `--autostart` 启动的冒烟检查验证静默启动、手动重复启动打开已有服务、登录触发的重复进程静默退出和 SIGTERM 清理。
-
-图形自动化连接不可用，因此没有完成菜单点击、原生文件选择／确认弹窗、Finder reopen 或浏览器画面验收；实际注销再登录、系统设置对 LaunchAgent 的处理也未验证。Intel 实机、macOS 13 实机、注销／关机与 PostgreSQL 未验证。新增 macOS CI 配置尚未在远端运行；本地未配置 PostgreSQL 的用例按现有规则跳过。
-
-自动测试不等于图形交互验收。发布前仍需在目标 Mac 上检查 Finder 首次／重复启动、中文菜单、深浅色／多显示器菜单栏、默认浏览器及 Basic 提示、重启与退出、注销／关机。Intel 与最低系统版本也需分别验收；构建另一架构不代表已在对应硬件运行。此阶段不提供自动更新、身份签名或公证。
+- [ ] Apple Silicon、Intel、最低系统：Finder 安装／首次启动、中文菜单、深浅色、多屏、浏览器及 Basic 提示。
+- [ ] 重复运行／Finder reopen 仅保留一个服务；重启保留数据／认证／端口，JSON 完整重启才生效。
+- [ ] 端口冲突／异常重试、退出、SIGTERM、注销／关机；未就绪时不打开错误页面。
+- [ ] 临时 SQLite：原生选择／确认、WAL 备份恢复、原库保留、失败回退、外部配置修改拒绝；私有权限／符号链接／扩展 ACL 拒绝。
+- [ ] 登录注册与 plist、实际重登录静默启动、系统限制、路径改变后重新注册、删除应用后的启动项清理。

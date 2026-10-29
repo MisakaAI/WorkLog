@@ -1,78 +1,118 @@
-# Worklog
+# WorkLog
 
-Worklog 是一个单用户工作台，支持项目与任务管理、待办事项、甘特图和富文本工作日志。  
-前端使用 Vue，后端使用 Go，提供 REST API 与 MCP 工具，浏览器和 AI 客户端共享同一份业务数据。
+WorkLog 是面向个人的工作管理系统。  
+把项目、任务、临时待办和每天的工作日志放在同一个工作台，方便安排工作、跟踪进度和回顾记录。
 
-默认使用纯 Go SQLite，无需 PostgreSQL 或 CGO；也支持 PostgreSQL。  
-数据保存在服务端，重启后不会丢失。当前不提供多用户注册、OAuth、自动冲突合并或日志历史记录。
+你可以在浏览器中使用，也可以让支持 MCP 的 AI 客户端查询和更新工作。  
+MCP 是 AI 客户端连接外部工具的协议；在 WorkLog 中，AI 和浏览器使用同一份服务端数据，不需要来回复制记录。
 
-## 开发环境
+## 能做什么
 
-- Go **1.27.3**（以 [go.mod](go.mod) 为准）。
-- 推荐 Node.js **24.15+** 和 npm。
-- 默认无需 Docker 或独立数据库。
+- **项目与任务**：按项目整理任务，设置分类、优先级和日期；完成的项目可以归档，项目数据可用 ZIP 导入、导出。
+- **看板与甘特图**：在列表和看板中跟踪状态，用甘特图查看排期。甘特图按自然日显示，不会自动安排任务日期。
+- **待办事项**：记录临时事项，勾选完成。
+- **工作日志**：按日期记录富文本日志，支持列表、代码和自动保存。
+- **AI 集成**：通过 MCP 查询进度、创建任务或整理日志；也提供 REST API，供其他程序接入。
+- **数据与部署**：Vue 前端、Go 后端。默认使用 SQLite，无需另装数据库；也支持 PostgreSQL。可安装桌面版、Linux 服务，或使用 Docker。
 
-## 部署与启动
+这是单用户系统，没有注册、多用户账号或 OAuth 登录。  
+当前也没有日志历史、回收站或自动冲突合并，请定期[备份](docs/OPERATIONS.md)。
 
-### Linux
+## 界面预览
 
-从 [Releases](https://github.com/MisakaAI/WorkLog/releases) 下载与主机架构匹配的 `.tar.zst` 发布包（`linux-x86_64` 为 amd64，`linux-arm64` 为 arm64），解压后运行安装脚本：
+### 主界面（看板）
+
+![WorkLog 主界面（看板）](docs/board.png)
+
+### 进度（甘特图）
+
+![WorkLog 进度（甘特图）](docs/gantt.png)
+
+## 快速开始
+
+### 在线体验
+
+访问 [在线体验站点](https://worklog.misaka.cn/) 即可体验，无需安装。  
+该站点为**纯前端版本**，数据仅存储在当前浏览器中，**可能丢失**，请勿将其作为重要数据的唯一存储。
+
+长期使用建议自行部署或使用桌面版，安装方式见下方。
+
+### 选择安装方式
+
+正式发布包从 [GitHub Releases](https://github.com/MisakaAI/WorkLog/releases) 下载。将文件名中的 `<版本>` 替换为下载页上的实际版本。
+
+| 方式 | 文件或前提 | 操作入口 |
+| --- | --- | --- |
+| Linux 服务 | `worklog-v<版本>-linux-x86_64.tar.zst` 或 `linux-arm64.tar.zst`；需要 systemd、Bash、tar 和 zstd | [安装与启动](docs/DEPLOYMENT.md#linux-systemd-部署) |
+| Windows 桌面版 | `worklog-v<版本>-windows-x86_64.exe` | 下载后运行，界面在默认浏览器中打开；见 [Windows 说明](docs/WINDOWS_DESKTOP.md) |
+| macOS 桌面版 | `worklog-v<版本>-macos-arm64.dmg` 或 `macos-x86_64.dmg` | 打开镜像，将 `worklog.app` 拖入 Applications 后启动；见 [macOS 说明](docs/MACOS_DESKTOP.md) |
+| Docker Compose | Git、Docker 和 Compose 插件 | [准备凭证并启动](docs/DEPLOYMENT.md#docker-compose)；镜像从源码构建 |
+| 从源码运行 | Git、Go 1.27.3、Node.js 24.15+ 和 npm | 见下方命令和[开发文档](docs/DEVELOPMENT.md) |
+
+发布包的目标电脑不需要 Go 或 Node.js。macOS 需要 13+，Apple Silicon 优先选择 arm64。  
+桌面包未提供开发者签名，系统可能提示安全警告；请确认来源，不要关闭系统整体安全保护。
+
+Linux 下载包的最短安装流程（以 x86_64 为例）：
 
 ```sh
 tar --zstd -xf worklog-v<版本>-linux-x86_64.tar.zst
 cd worklog-v<版本>-linux-x86_64
-sudo bash ./install.sh  # 安装系统服务
-# 或 bash ./install.sh，以当前用户安装 systemd 用户服务
+bash ./install.sh  # 当前用户的 systemd 服务；安装系统服务则使用 sudo bash ./install.sh
 ```
 
-默认访问 **http://127.0.0.1:12450**。用户服务如需开机运行且退出登录后保持运行，需管理员执行 `sudo loginctl enable-linger 用户名`。
-详细安装、配置、升级与维护见[部署文档](docs/DEPLOYMENT.md)。
+Linux 和 Docker 默认访问 **http://127.0.0.1:12450**。  
+桌面版使用系统分配的空闲端口，启动后自动打开浏览器；关闭浏览器不会退出服务，请从托盘或菜单栏退出。
 
-### Windows
+### 从源码运行
 
-从 [Releases](https://github.com/MisakaAI/WorkLog/releases) 下载并运行 `worklog-v<版本>-windows-x86_64.exe`。这是原生系统托盘桌面版，使用默认浏览器打开界面，数据默认保存在 `%APPDATA%\WorklogDesktop`。详细说明见 [Windows 桌面版](docs/WINDOWS_DESKTOP.md)。
-
-### macOS
-
-在 Mac 上执行 `bash scripts/build-macos.sh`，生成原生 AppKit 菜单栏 `worklog.app` 及带版本、架构信息的 `.dmg` 安装镜像。打开镜像后将 `worklog.app` 拖入 Applications，启动后通过默认浏览器打开界面；菜单提供登录后启动及 SQLite 备份导入／导出。删除应用前请先取消登录后启动，注册文件不会随 `.app` 自动删除。数据默认保存在 `~/Library/Application Support/WorklogDesktop`。构建、配置和使用方式见 [macOS 桌面版](docs/MACOS_DESKTOP.md)。
-
-## 发布版本
-
-发行版本以 Git tag 为唯一来源，不再维护仓库根目录的 `VERSION` 文件，也不支持通过 `VERSION` 环境变量覆盖。Linux / Windows / macOS 打包脚本共用 `scripts/release-version.sh`，取当前 `HEAD` 可达的最近 `v[0-9]*` 标签（`git describe --tags --abbrev=0`），并验证为 `vX.Y.Z`（可带预发行／构建后缀）。这不是跨分支按创建时间或版本大小取标签；标签后的开发提交沿用该标签版本，正式发布应在对应标签提交上构建。
+在安装上述开发依赖后执行，无需发行标签：
 
 ```sh
-# 先提交代码、脚本与文档，再创建发行标签：
-git tag -a v0.2.0-rc.1 -m "Release v0.2.0-rc.1"
-bash scripts/build-linux.sh
-bash scripts/build-windows.sh
-# 在 Mac 上还可构建：bash scripts/build-macos.sh
-# 需要发布到远端时，推送提交及标签：
-git push origin HEAD
-git push origin v0.2.0-rc.1
+git clone https://github.com/MisakaAI/WorkLog.git
+cd WorkLog
+(cd Web && npm ci && npm run build)
+go build -o bin/worklog ./cmd/worklog
+./bin/worklog
 ```
 
-打包需要 Git 仓库及标签；没有标签或标签格式非法会直接失败，不回退到硬编码版本。已有完整克隆可执行 `git fetch --tags`；浅克隆先执行 `git fetch --unshallow --tags`，CI checkout 设置 `fetch-depth: 0`。源码 ZIP 不包含 Git 元数据，不能直接运行发行打包脚本。
+命令适用于 Bash 等兼容 shell；Windows 可直接使用发布的桌面版。  
+保持终端运行，打开 **http://127.0.0.1:12450**。  
+首次启动自动创建 SQLite 数据库 `data/worklog.db`，默认业务时区为 `Asia/Shanghai`。
 
-版本解析回归测试：`bash scripts/test-release-version.sh`。前端 `Web/package.json` 的版本是内部 npm 包元数据，不作为整体发行版本；发布包内的 `VERSION` 只是由标签生成的安装记录。
+### 第一次使用
 
-## 简单使用
+1. 创建一个项目，再添加任务；在列表、看板或甘特图中查看进度。  
+2. 添加一条待办，按日期写下工作日志。等待保存成功，刷新页面确认记录仍在。  
+3. 需要 AI 协助时，按 [MCP 指南](docs/MCP.md)配置客户端。浏览器不需要填写 MCP Token。
 
-- 在工作台创建项目、添加任务，在列表／看板／甘特图中管理进度与排期。
-- 使用待办记录临时事项，按日期编辑富文本工作日志；服务端默认业务时区为 `Asia/Shanghai`。
-- 多个标签页或 MCP 同时修改时，旧版本保存会返回冲突。先复制未保存内容，再重新加载最新数据，不要反复覆盖提交。
-- AI 客户端可通过 `/mcp` 接入，使用独立 Bearer 令牌；配置示例见 [MCP 客户端指南](docs/MCP.md)。浏览器不需要配置该令牌。
-- 定期备份数据，SQLite 可执行 `./bin/worklog --conf=/etc/worklog backup ./backups/worklog.db`（使用与服务相同的配置；仅默认配置启动时可省略 `--conf`）；**不要只复制运行中的 `.db` 文件**。
-恢复步骤见[备份与恢复](docs/OPERATIONS.md)。
+默认本机访问无需密码，**同机其他程序也可能访问数据**。  
+远程使用前必须配置独立密码、令牌和 HTTPS，不能直接向公网开放 12450 端口。  
+详见[身份认证与安全](docs/AUTHENTICATION.md)。
 
-## 文档
+多个页面或 AI 同时修改时，旧版本保存可能冲突。先复制未保存内容，再重新加载最新数据；不要反复覆盖提交。
 
-- [部署、打包与源码构建](docs/DEPLOYMENT.md)：Releases 安装、Linux systemd 部署、打包构建、JSON 配置、Nginx、Docker 与 PostgreSQL。
-- [Windows 桌面版](docs/WINDOWS_DESKTOP.md)：Windows 托盘版行为与构建说明。
-- [macOS 桌面版](docs/MACOS_DESKTOP.md)：原生菜单栏、浏览器界面、单实例与 Mac 构建说明。
-- [身份认证与安全](docs/AUTHENTICATION.md)：本地／Basic／Bearer／stdio、权限矩阵与安全边界。
-- [REST API](docs/REST_API.md)：端点、细粒度资源、版本与幂等约定，以及前端快照协议。
-- [MCP 客户端指南](docs/MCP.md)：工具列表、Codex、HTTP 与 stdio 配置。
-- [备份与恢复](docs/OPERATIONS.md)：SQLite 和 PostgreSQL 数据维护。
-- [开发与测试](docs/DEVELOPMENT.md)：前端热更新、测试命令、代码结构与存储并发约定。
-- [工作日历自定义](docs/WORK_CALENDAR.md)：通过 JSON 设置工作日、节假日、调休、单休或取消节日标记。
-- [前端说明](Web/README.md)：独立前端运行与配置。
+## 用 AI 管理工作
+
+连接 MCP 后，可以向 AI 提出这类请求：
+
+- “列出这个项目还未完成的任务。”
+- “创建一个‘准备周报’任务，截止日期设为本周五。”
+- “读取今天的工作日志，帮我整理一下；确认内容后再保存。”
+
+具体是否执行、执行前是否询问，由 AI 客户端决定。建议先使用只读令牌。  
+MCP 默认不允许删除、清空日志等操作；写权限仍可修改已有内容，不能代替备份。  
+连接、认证和工具说明集中在 [MCP 客户端指南](docs/MCP.md)。
+
+## 文档导航
+
+| 想完成的事 | 文档 |
+| --- | --- |
+| 安装 Linux 服务、Docker，配置数据库或 HTTPS | [部署与配置](docs/DEPLOYMENT.md) |
+| 使用桌面版、查找数据和日志 | [Windows](docs/WINDOWS_DESKTOP.md) · [macOS](docs/MACOS_DESKTOP.md) |
+| 配置密码、Token 和访问权限 | [身份认证与安全](docs/AUTHENTICATION.md) |
+| 连接 AI 客户端 | [MCP 客户端指南](docs/MCP.md) |
+| 备份、恢复和保护数据 | [备份与恢复](docs/OPERATIONS.md) |
+| 调用 API、处理版本冲突 | [REST API](docs/REST_API.md) |
+| 修改源码、运行测试、构建发布包 | [开发与测试](docs/DEVELOPMENT.md) |
+| 调整工作日、节假日和调休 | [工作日历自定义](docs/WORK_CALENDAR.md) |
+| 只运行前端或配置浏览器本地模式 | [前端说明](Web/README.md) |
