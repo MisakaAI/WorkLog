@@ -2,8 +2,10 @@ package main
 
 import (
 	"context"
+	"io"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 
@@ -34,8 +36,8 @@ func TestRestoreCommand(t *testing.T) {
 	if e = restore(ctx, backup, target); e != nil {
 		t.Fatal(e)
 	}
-	if e = restore(ctx, backup, target); e == nil {
-		t.Fatal("restore overwrote existing database")
+	if e = restoreWithIO(ctx, backup, target, strings.NewReader("\n"), io.Discard, time.Now); e == nil {
+		t.Fatal("restore overwrote existing database without confirmation")
 	}
 	restored, e := storage.Open(ctx, "sqlite", target)
 	if e != nil {

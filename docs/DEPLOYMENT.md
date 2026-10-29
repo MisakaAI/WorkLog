@@ -207,9 +207,15 @@ bash ./uninstall.sh purge       # 删除当前用户安装的程序、服务、�
 | `stdio` | 启动本机 MCP 标准输入／输出通信，也会自动迁移；不是 HTTP 服务 |
 | `migrate` | 仅初始化／升级数据库，然后退出 |
 | `backup PATH` | 创建并校验 SQLite 备份，目标必须不存在 |
-| `restore PATH` | 恢复独立 SQLite 备份；目标数据库及 WAL／SHM 必须不存在 |
+| `restore PATH` | 将独立 SQLite 备份恢复到现用 `db_dsn`；已有目标需输入完整一行 `Y`／`y` 并回车确认，旧库留存为 `target.YYYYMMDD.bak`，回车默认取消；新目标不询问 |
 
-不写子命令等同于 `serve`，会持续运行，不是仅检查配置。所有命令共用配置，例如 `./bin/worklog --conf=/etc/worklog backup /安全路径/backup.db`。备份与恢复的完整操作见[运维文档](OPERATIONS.md)。
+不写子命令等同于 `serve`，会持续运行，不是仅检查配置。
+所有命令共用配置，例如 `./bin/worklog --conf=/etc/worklog backup /安全路径/backup.db`。
+CLI 恢复前停止所有访问同一数据库的进程，无需修改 `db_dsn`；
+目标 WAL／SHM 存在（即使为空），或同日 `.bak` 及其 WAL／SHM 已存在时拒绝恢复，不覆盖留存文件，不能手动删除 WAL 来绕过检查。
+系统服务以 `sudo -u worklog /opt/worklog/bin/worklog --conf /etc/worklog/config.json restore "$backup_file"` 恢复，仅成功后启动；
+取消或失败时保持停服，已留存的 `.bak` 不会自动回滚。
+备份与恢复的完整操作见[运维文档](OPERATIONS.md)。
 
 ### 前端文件
 

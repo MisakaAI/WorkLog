@@ -59,7 +59,7 @@ func run(logger *slog.Logger) error {
 	}
 	if command == "restore" {
 		if len(args) != 2 || c.Driver != "sqlite" {
-			return diagnostics.Safe("usage: worklog restore backup.db (SQLite only; destination must not exist)")
+			return diagnostics.Safe("usage: worklog restore backup.db (SQLite only; existing destination requires Y/y confirmation and is retained as target.YYYYMMDD.bak)")
 		}
 		return diagnostics.Wrap("restore_database", restore(ctx, args[1], c.DSN))
 	}
@@ -114,7 +114,7 @@ func parseArgs(args []string) (string, []string, error) {
 	flags := flag.NewFlagSet("worklog", flag.ContinueOnError)
 	conf := flags.String("conf", "", "JSON configuration file or directory containing config.json (otherwise uses built-in defaults)")
 	flags.Usage = func() {
-		_, _ = io.WriteString(flags.Output(), "Usage: worklog [--conf PATH] [serve | stdio | migrate | backup PATH | restore PATH]\n")
+		_, _ = io.WriteString(flags.Output(), "Usage: worklog [--conf PATH] [serve | stdio | migrate | backup PATH | restore PATH]\nRestore (SQLite only): stop the service first; an existing target requires Y/y (Enter cancels) and is retained as target.YYYYMMDD.bak. Target WAL/SHM or existing backup files prevent replacement; do not manually delete WAL.\n")
 		flags.PrintDefaults()
 	}
 	if err := flags.Parse(args); err != nil {
@@ -129,8 +129,4 @@ func parseArgs(args []string) (string, []string, error) {
 		return "", nil, diagnostics.Safe("--conf must not be empty")
 	}
 	return *conf, flags.Args(), nil
-}
-
-func restore(ctx context.Context, source, destination string) error {
-	return storage.RestoreSQLite(ctx, source, destination)
 }

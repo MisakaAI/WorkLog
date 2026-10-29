@@ -6,6 +6,7 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 )
 
@@ -115,6 +116,100 @@ func TestRestoreSQLiteRefusesSourceWAL(t *testing.T) {
 		t.Fatal("accepted nonempty source WAL")
 	}
 	assertRestoreTargetAbsent(t, destination)
+}
+
+func TestVerifySQLiteRestoreSourceWAL(t *testing.T) {
+	for _, kind := range []string{"absent", "empty", "nonempty", "directory"} {
+		t.Run(kind, func(t *testing.T) {
+			source := standaloneRestoreSource(t)
+			var err error
+			switch kind {
+			case "empty":
+				err = os.WriteFile(source+"-wal", nil, 0600)
+			case "nonempty":
+				err = os.WriteFile(source+"-wal", []byte("pending data"), 0600)
+			case "directory":
+				err = os.Mkdir(source+"-wal", 0700)
+			}
+			if err != nil {
+				t.Fatal(err)
+			}
+			err = VerifySQLiteRestoreSource(context.Background(), source)
+			wantValid := kind == "absent" || kind == "empty"
+			if (err == nil) != wantValid {
+				t.Fatalf("source WAL %s: err = %v, wantValid = %v", kind, err, wantValid)
+			}
+			if kind == "nonempty" {
+				contents, err := os.ReadFile(source + "-wal")
+				if err != nil || string(contents) != "pending data" {
+					t.Fatalf("source WAL changed: %q, %v", contents, err)
+				}
+			}
+		})
+	}
+}
+
+func TestRestoreSQLiteRefusesNonregularSource(t *testing.T) {
+	for _, kind := range []string{"symlink", "dangling-symlink", "directory"} {
+		t.Run(kind, func(t *testing.T) {
+			actual := standaloneRestoreSource(t)
+			source := filepath.Join(t.TempDir(), "source.db")
+			var err error
+			if kind == "directory" {
+				err = os.Mkdir(source, 0700)
+			} else {
+				referent := actual
+				if kind == "dangling-symlink" {
+					referent += ".missing"
+				}
+				err = os.Symlink(referent, source)
+			}
+			if err != nil {
+				t.Fatal(err)
+			}
+			if err = VerifySQLiteRestoreSource(context.Background(), source); err == nil || !strings.Contains(err.Error(), "source must be a regular file") {
+				t.Fatalf("preflight accepted nonregular source: %v", err)
+			}
+			destination := filepath.Join(t.TempDir(), "restored.db")
+			// The copy entry point must enforce the same check, not just the CLI.
+			if err = RestoreSQLite(context.Background(), source, destination); err == nil || !strings.Contains(err.Error(), "source must be a regular file") {
+				t.Fatalf("restore accepted nonregular source: %v", err)
+			}
+			assertRestoreTargetAbsent(t, destination)
+		})
+	}
+}
+
+func TestRestoreSQLiteSourceParentSymlink(t *testing.T) {
+	for _, wal := range []bool{false, true} {
+		name := "standalone"
+		if wal {
+			name = "nonempty-wal"
+		}
+		t.Run(name, func(t *testing.T) {
+			actual := standaloneRestoreSource(t)
+			parent := filepath.Join(t.TempDir(), "source-directory")
+			if err := os.Symlink(filepath.Dir(actual), parent); err != nil {
+				t.Fatal(err)
+			}
+			if wal {
+				if err := os.WriteFile(actual+"-wal", []byte("pending data"), 0600); err != nil {
+					t.Fatal(err)
+				}
+			}
+			source := filepath.Join(parent, filepath.Base(actual))
+			destination := filepath.Join(t.TempDir(), "restored.db")
+			err := RestoreSQLite(context.Background(), source, destination)
+			if wal {
+				if err == nil || !strings.Contains(err.Error(), "standalone backup") {
+					t.Fatalf("parent alias bypassed source WAL check: %v", err)
+				}
+				assertRestoreTargetAbsent(t, destination)
+			} else if err != nil {
+				t.Fatalf("parent symlink should allow standalone source: %v", err)
+			}
+		})
+	}
 }
 
 func TestRestoreSQLiteRefusesSamePath(t *testing.T) {

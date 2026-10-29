@@ -1,90 +1,148 @@
 # 备份与恢复
 
-当前没有日志历史、删除回收站或后台备份调度。请定期备份、限制权限并做恢复演练。  
-备份包含私人数据，应加密保存到与服务独立的安全位置。
+以下以 **Linux 自动安装的 systemd 系统服务、SQLite 数据库**为主例。日常只需：停服 → 备份 → 启动；CLI 恢复时停服，确认后将旧库留存为带日期的 `.bak`，在原路径恢复，成功后再启动。
 
-WorkLog 业务配置仅从 JSON 读取，不使用环境变量或 `.env`。下文所有 WorkLog 命令都显式指定 `--conf`，本机示例以 `./config.json` 为现用配置，请替换成实际路径。升级前先备份，不要让不同版本进程并行执行迁移。
+- 程序：`/opt/worklog/bin/worklog`；配置：`/etc/worklog/config.json`；运行用户：`worklog`。
+- 默认数据库：`/var/lib/worklog/worklog.db`。本文约定备份目录为 **`/var/lib/worklog/backups`**（脚本创建，并非程序自动调度）。
+- 备份命名：`backup_$(date +%Y%m%d).db`，例如 **`backup_20261029.db`**。同日重跑拒绝覆盖；确需再备份时，手动换一个未使用的文件名。
 
-## 先找到数据与配置
+先确认现用配置的 `db_driver`、`db_dsn`、`token_file`；修改过安装路径或服务用户时需相应调整。业务配置只从 JSON 读取，不使用环境变量或 `.env`；**相对路径以进程工作目录为准，不是配置文件所在目录**。不要把浏览器访问的 `/config.json` 当成服务配置。
 
-以正在运行的实例为准，先确认启动参数中的 `--conf`，再查看配置里的 `db_driver`、`db_dsn` 和 `token_file`。**相对路径以进程工作目录为基准，不是配置文件所在目录。**
+当前没有日志历史、删除回收站或后台备份调度。请定期备份并演练恢复；升级前先备份，不要让不同版本进程并行迁移。备份含私人数据，应加密另存到独立安全位置，不能只留在数据目录（卸载清理可能连同备份一起删除）。[配置与凭证也要另行备份](#配置与凭证另行备份)。
 
-| 运行方式 | 数据与配置位置 |
-| --- | --- |
-| 命令行服务 | 内置默认数据库为 `./data/worklog.db`、令牌为 `./data/mcp-token`；仓库的 `config.example.json` 则使用 `/var/lib/worklog/`，不能混用两者 |
-| Linux systemd | 系统服务数据为 `/var/lib/worklog`，配置为 `/etc/worklog/config.json`；用户服务路径见[安装说明](DEPLOYMENT.md#当前用户服务) |
-| Compose | 主机 `deploy/config.json` 挂载为 `/app/config/config.json`；命名卷 `worklog-data` 挂载为 `/app/data`，示例数据库为 `/app/data/worklog.db`。卷的实际名称可能带 Compose 项目前缀，可用 `docker compose config --volumes` 和 `docker volume inspect <实际卷名>` 定位 |
-| Windows 桌面版 | 默认工作目录为 `%APPDATA%\WorklogDesktop`，数据库为其下 `data\worklog.db`；配置存在时默认读取该目录的 `config.json` |
-| macOS 桌面版 | 默认工作目录为 `~/Library/Application Support/WorklogDesktop`，数据库为其下 `data/worklog.db`；配置存在时默认读取该目录的 `config.json` |
-| PostgreSQL | 数据在 `db_dsn` 指定的 PostgreSQL 实例中，不在本地 SQLite 文件或容器卷中 |
+## 1. 停服备份（推荐）
 
-桌面版显式传入 `--conf` 或修改过 `db_dsn` 时，以实际配置为准；导入备份后数据库路径也可能变化。不要把浏览器可访问的 `/config.json` 当成服务配置，它只含公开前端设置。
+先停止其他访问同一数据库的 HTTP／stdio 写入进程，不要只关浏览器。下面整段在终端执行：只处理原本正在运行的系统服务，先检查路径和权限，再停服；备份失败或中断也会尝试重新启动服务。
 
-## SQLite 在线备份
-
-**禁止只复制运行中的主 `.db` 文件**，已提交数据可能仍在 WAL 中。使用在线一致性 `VACUUM INTO`：
-
-每次创建独立目录，并用目录的随机后缀命名备份，避免同一天重试时撞名。以下为 POSIX shell 示例，后续恢复沿用本次的 `backup_file`：
-
-```sh
+```bash
+sudo bash <<'BASH'
+set -euo pipefail
+compress_zstd=1  # 设为 0 关闭压缩
 umask 077
-mkdir -p ./backups
-backup_dir=$(mktemp -d "$PWD/backups/sqlite-XXXXXXXX")
-backup_file="$backup_dir/worklog-$(basename "$backup_dir").db"
-./bin/worklog --conf ./config.json backup "$backup_file"
+if (( compress_zstd )); then
+    sudo -u worklog sh -c 'command -v zstd >/dev/null' || { echo '请先安装 zstd，或设 compress_zstd=0' >&2; exit 1; }
+fi
+backup_file="/var/lib/worklog/backups/backup_$(date +%Y%m%d).db"
+install -d -o worklog -g "$(id -gn worklog)" -m 700 /var/lib/worklog/backups
+cd /var/lib/worklog
+sudo -u worklog test -x /opt/worklog/bin/worklog
+sudo -u worklog test -r /etc/worklog/config.json
+sudo -u worklog test -w /var/lib/worklog/backups
+for file in "$backup_file" "$backup_file.zst"; do
+    if [[ -e "$file" || -L "$file" ]]; then
+        echo "拒绝覆盖：$file" >&2
+        exit 1
+    fi
+done
+systemctl is-active --quiet worklog.service
+restart_service() {
+    rc=$?
+    if ! systemctl start worklog.service; then
+        echo '启动失败，请检查 journalctl -u worklog.service；备份是否成功以命令结果为准。' >&2
+        rc=1
+    fi
+    exit "$rc"
+}
+trap restart_service EXIT
+trap 'exit 130' INT
+trap 'exit 143' TERM
+systemctl stop worklog.service
+sudo -u worklog /opt/worklog/bin/worklog --conf /etc/worklog/config.json backup "$backup_file"
+systemctl start worklog.service
+systemctl is-active --quiet worklog.service
+trap - EXIT INT TERM
+if (( compress_zstd )); then
+    sudo -u worklog zstd -q -k -- "$backup_file"
+    sudo -u worklog chmod 600 "$backup_file.zst"
+    echo "压缩成功：$backup_file.zst（原 .db 保留）"
+fi
+echo "备份成功：$backup_file"
+BASH
 ```
 
-备份可在 HTTP 进程运行时执行，自动检查 `integrity_check` / `foreign_key_check`，目标已存在时拒绝覆盖。  
-备份只是时间点快照，不包含之后的提交。
+CLI 使用 `VACUUM INTO` 创建一致性快照，并检查 `integrity_check`／`foreign_key_check`；备份文件以 0600 创建，已有目标不会被覆盖。**禁止只复制运行中的主 `.db` 文件**，否则可能遗漏 WAL 中的已提交数据。命令失败后留下的文件不能当作有效备份，不要直接拿去恢复。
 
-### Linux systemd 安装的备份命令
+脚本不在恢复流程中使用，也不会启动原本已停止的服务。自动重新启动仅是尽力而为（断电或强制终止无法保证）；执行后检查 `sudo systemctl status worklog.service --no-pager`，启动失败时查看 `sudo journalctl -u worklog.service -n 100 --no-pager`。备份只是时间点快照，不包含后续提交。
 
-系统服务使用安装的程序和配置，以服务用户执行：
+## 2. 恢复现用数据库
 
-```sh
-sudo -u worklog sh -c 'cd /var/lib/worklog && dir=$(mktemp -d /var/lib/worklog/backup-XXXXXXXX) && /opt/worklog/bin/worklog --conf=/etc/worklog backup "$dir/worklog.db"'
+**`restore` 的参数是独立 SQLite 备份文件，目标由现用配置的 `db_dsn` 决定，无需修改配置。** 目标已存在时，CLI 校验备份后显示 `[y/N]` 确认提示；只有输入完整一行 `Y` 或 `y` 并回车才继续。直接回车默认取消；`yes`、带空格的输入、其他输入或 EOF 也取消，原库不变，命令返回非零。
+
+确认后，旧库留存为 `target.YYYYMMDD.bak`（日期取执行命令时的本地日期），再在原目标路径恢复。例如 `/var/lib/worklog/worklog.db` 留存为 `/var/lib/worklog/worklog.db.20261029.bak`。同日 `.bak` 或其 `-wal`／`-shm` 已存在时拒绝覆盖。目标不存在时不询问，直接创建新库；源与目标不能是同一文件，已有目标必须是普通文件，不能是符号链接。
+
+**① 选择备份。** 以下示例使用 `backup_20261029.db`；若是 `.db.zst`，必须先按下一节手动解压为 `.db`。备份源必须是普通文件，不能是文件符号链接（请使用真实文件路径）；不能使用仍在写入、依赖活跃 WAL 的数据库文件充当独立备份。
+
+```bash
+backup_file=/var/lib/worklog/backups/backup_20261029.db
 ```
 
-当前用户服务使用默认路径时：
+**② 停服 → 以服务用户恢复（按提示确认）→ 成功后启动。** 先停止其他访问同一数据库的 HTTP／stdio 进程，不要只关浏览器。沿用上面终端中的 `backup_file`：
 
-```sh
-backup_dir=$(mktemp -d "$HOME/.local/share/worklog/data/backup-XXXXXXXX")
-"$HOME/.local/share/worklog/app/bin/worklog" --conf="$HOME/.config/worklog/config.json" backup "$backup_dir/worklog.db"
+```bash
+sudo systemctl stop worklog.service &&
+    sudo -u worklog /opt/worklog/bin/worklog --conf /etc/worklog/config.json restore "$backup_file" &&
+    sudo systemctl start worklog.service &&
+    sudo systemctl status worklog.service --no-pager
 ```
 
-自定义过 XDG 路径时相应替换。上面备份位于服务数据目录，卸载清理也可能删除它，完成后应复制到目录之外的安全存储，并核对副本权限。
+取消或恢复失败时，`&&` 不会启动服务，应保持停服并检查错误。若已完成旧库留存，后续恢复失败也会保留 `.bak`，不会自动回滚；确认前取消或校验失败则原库不变。不要删除 `.bak` 来绕过同日冲突，也不要不检查错误就重复恢复或启动服务。恢复会校验源和目标，写入后 fsync；启动后检查 dashboard、任务与日志，确认无误后再按留存策略管理 `.bak`。升级后的迁移可能不可逆，切回旧程序不等于恢复旧数据库。
 
-## SQLite 恢复
+**目标 `-wal`／`-shm` 存在时，即使为空也拒绝恢复。** 应先停止所有访问该库的进程，让 SQLite 正常完成 checkpoint 和关闭；仍有冲突时先排查，**不能手动删除 WAL，也不要删除或移走 WAL／SHM 来绕过检查**。
 
-先停止所有 HTTP／stdio 写入进程。systemd 系统服务用 `sudo systemctl stop worklog.service`，用户服务用 `systemctl --user stop worklog.service`；不要只关浏览器。以服务运行用户执行恢复，使用对应的程序、配置和路径。
+**若此前误用 root 恢复导致数据库 owner 错误**，先停服并确认其他同库进程已停止，再执行以下命令修正主库所有权；后续恢复始终使用上面的 `sudo -u worklog` 命令：
 
-以下示例用于手动运行的 CLI。复制现用配置为独立恢复配置，只修改 `db_dsn` 为全新、尚不存在的文件路径，保留原库回退，绝不覆盖已有数据库：
-
-```sh
-install -m 600 ./config.json ./restore.json
+```bash
+sudo chown worklog:worklog /var/lib/worklog/worklog.db
 ```
 
-编辑 `./restore.json` 的 `db_dsn`，例如 `"db_dsn": "/absolute/path/WorkLog/data/restored.db"`，其他业务配置保持一致。然后执行：
+## 可选：zstd 压缩与手动解压
 
-```sh
-# 新终端中先将 backup_file 设为选定备份的绝对路径。
-./bin/worklog --conf ./restore.json restore "$backup_file"
-./bin/worklog --conf ./restore.json
+主备份脚本顶部的 `compress_zstd=1` 默认开启压缩，设为 `0` 可关闭。开启时在停服前检查 `zstd`；备份成功后先启动服务、确认运行并解除 trap，再压缩同一个 `backup_file`，不延长停服时间。保留原 `.db`，生成同名 `.db.zst`（例如 `backup_20261029.db.zst`），不强制覆盖。压缩失败会返回非零且不输出成功提示；服务已恢复，原 `.db` 仍保留。
+
+**WorkLog 不会自动解压 `.zst`。restore 前必须手动解压为 `.db`。** 因原 `.db` 可能仍存在，以下另取未使用的输出名，不覆盖已有文件：
+
+```bash
+sudo -u worklog bash <<'BASH'
+set -euo pipefail
+umask 077
+command -v zstd >/dev/null || { echo '请先安装 zstd' >&2; exit 1; }
+backup_file=/var/lib/worklog/backups/backup_20261029.unpacked.db
+zstd -d -q -k -o "$backup_file" -- /var/lib/worklog/backups/backup_20261029.db.zst
+chmod 600 "$backup_file"
+BASH
 ```
 
-重新查询 dashboard、任务与日志确认无误后，再将正式 JSON 配置的 `db_dsn` 切换为新库路径，并以正式配置启动：
+解压成功后，在恢复步骤①中设置 `backup_file=/var/lib/worklog/backups/backup_20261029.unpacked.db`。解压失败时不要使用输出文件，也不要强制覆盖重试，应检查错误并另取新输出名。
 
-```sh
-# 先停止上面的验证进程，避免重复启动。
-./bin/worklog --conf ./config.json
+## 补充：在线备份与其他部署方式
+
+### SQLite 在线备份
+
+允许 HTTP 服务运行时执行同一 `backup` 命令；先按主流程准备私有备份目录，选未使用的文件名。使用与正在运行的服务**相同版本**的程序和配置，因为 CLI 打开数据库也会执行迁移：
+
+```bash
+backup_file="/var/lib/worklog/backups/backup_$(date +%Y%m%d).db"
+sudo -u worklog sh -c 'cd /var/lib/worklog && /opt/worklog/bin/worklog --conf /etc/worklog/config.json backup "$1"' sh "$backup_file"
 ```
 
-systemd 部署应将新库保存在服务可写的数据目录，系统服务默认沙箱不允许写到任意外部路径。验证并切换正式配置后，使用对应的 `systemctl start worklog.service`（用户服务加 `--user`）启动，不再保留手动验证进程。
+### 路径与命令替换
 
-restore 校验源和目标数据库，拒绝已有目标 `.db` / `-wal` / `-shm`，写入后 fsync。若目标已存在，选另一个新路径，**不要删除原库以绕过检查**。
-不要把仍在写入、依赖 WAL 的活跃数据库当作独立备份传入 restore。
+CLI 恢复原则不变：停止所有访问同一数据库的进程，以实际运行用户和现用配置执行 `restore`；已有目标需输入完整一行 `Y`／`y` 并回车确认，旧库留存为 `target.YYYYMMDD.bak`，回车默认取消。无需切换 `db_dsn`；仅恢复成功后启动并验证。桌面导入及下文 Compose 的新目标恢复流程保持不变。
+
+| 运行方式 | 调整要点 |
+| --- | --- |
+| 当前用户 systemd 服务 | 使用 `systemctl --user stop worklog.service`／`systemctl --user start worklog.service`，不加 sudo；程序为 `~/.local/share/worklog/app/bin/worklog`，配置为 `~/.config/worklog/config.json`，数据在 `~/.local/share/worklog/data`。自定义 XDG 路径见[安装说明](DEPLOYMENT.md#当前用户服务) |
+| 手动 CLI | 使用实际程序及 `--conf /绝对路径/config.json`。内置默认数据库／令牌为 `./data/worklog.db`、`./data/mcp-token`，仓库模板则使用 `/var/lib/worklog/`，不要混用 |
+| Windows 桌面版 | 默认工作目录为 `%APPDATA%\WorklogDesktop`，数据库为其下 `data\worklog.db`，配置存在时读取该目录的 `config.json` |
+| macOS 桌面版 | 默认工作目录为 `~/Library/Application Support/WorklogDesktop`，数据库为其下 `data/worklog.db`，配置存在时读取该目录的 `config.json` |
+| Compose／PostgreSQL | 见下文，SQLite 命令不适用于 PostgreSQL |
+
+桌面版显式传入 `--conf`、修改 `db_dsn` 或导入备份后，以实际路径为准；恢复前退出桌面应用及其他写入进程。
 
 ## 容器
+
+<details>
+<summary>Compose 部署的备份与恢复（systemd 用户可跳过）</summary>
 
 项目的 Compose 将本地 `deploy/config.json` 只读挂载为容器内 `/app/config/config.json`，并将 `worklog-data` 命名卷挂载为 `/app/data`。配置文件按[部署说明](DEPLOYMENT.md#docker-compose)授予 UID 10001 读取权限。PostgreSQL Compose 部署执行下列命令时，应同部署时一样添加 `-f compose.yaml -f compose.postgres.yaml`；SQLite 的备份／恢复命令不适用于 PostgreSQL。
 
@@ -153,6 +211,8 @@ sudo rmdir -- "$restore_dir"
 ```
 
 不修改环境变量，也不将恢复结果覆盖回原数据库路径。
+
+</details>
 
 ## 配置与凭证另行备份
 
