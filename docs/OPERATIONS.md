@@ -12,52 +12,12 @@
 
 ## 1. 停服备份（推荐）
 
-先停止其他访问同一数据库的 HTTP／stdio 写入进程，不要只关浏览器。下面整段在终端执行：只处理原本正在运行的系统服务，先检查路径和权限，再停服；备份失败或中断也会尝试重新启动服务。
+先停止其他访问同一数据库的 HTTP／stdio 写入进程，不要只关浏览器。备份脚本见 [`scripts/worklog-backup.sh`](../scripts/worklog-backup.sh)：只处理原本正在运行的系统服务，先检查路径和权限，再停服；备份失败或中断也会尝试重新启动服务。
+
+在仓库根目录执行（**会短暂停服**）：
 
 ```bash
-sudo bash <<'BASH'
-set -euo pipefail
-compress_zstd=1  # 设为 0 关闭压缩
-umask 077
-if (( compress_zstd )); then
-    sudo -u worklog sh -c 'command -v zstd >/dev/null' || { echo '请先安装 zstd，或设 compress_zstd=0' >&2; exit 1; }
-fi
-backup_file="/var/lib/worklog/backups/backup_$(date +%Y%m%d).db"
-install -d -o worklog -g "$(id -gn worklog)" -m 700 /var/lib/worklog/backups
-cd /var/lib/worklog
-sudo -u worklog test -x /opt/worklog/bin/worklog
-sudo -u worklog test -r /etc/worklog/config.json
-sudo -u worklog test -w /var/lib/worklog/backups
-for file in "$backup_file" "$backup_file.zst"; do
-    if [[ -e "$file" || -L "$file" ]]; then
-        echo "拒绝覆盖：$file" >&2
-        exit 1
-    fi
-done
-systemctl is-active --quiet worklog.service
-restart_service() {
-    rc=$?
-    if ! systemctl start worklog.service; then
-        echo '启动失败，请检查 journalctl -u worklog.service；备份是否成功以命令结果为准。' >&2
-        rc=1
-    fi
-    exit "$rc"
-}
-trap restart_service EXIT
-trap 'exit 130' INT
-trap 'exit 143' TERM
-systemctl stop worklog.service
-sudo -u worklog /opt/worklog/bin/worklog --conf /etc/worklog/config.json backup "$backup_file"
-systemctl start worklog.service
-systemctl is-active --quiet worklog.service
-trap - EXIT INT TERM
-if (( compress_zstd )); then
-    sudo -u worklog zstd -q -k -- "$backup_file"
-    sudo -u worklog chmod 600 "$backup_file.zst"
-    echo "压缩成功：$backup_file.zst（原 .db 保留）"
-fi
-echo "备份成功：$backup_file"
-BASH
+sudo /bin/bash scripts/worklog-backup.sh
 ```
 
 CLI 使用 `VACUUM INTO` 创建一致性快照，并检查 `integrity_check`／`foreign_key_check`；备份文件以 0600 创建，已有目标不会被覆盖。**禁止只复制运行中的主 `.db` 文件**，否则可能遗漏 WAL 中的已提交数据。命令失败后留下的文件不能当作有效备份，不要直接拿去恢复。
@@ -66,7 +26,7 @@ CLI 使用 `VACUUM INTO` 创建一致性快照，并检查 `integrity_check`／`
 
 ### 可选：cron 自动备份
 
-复用上方停服备份脚本，不另写一套逻辑：将 `sudo bash <<'BASH'` 与结束行 `BASH` **之间的内容（不含这两行外层包装）**保存到 `/usr/local/sbin/worklog-backup.sh`，并在文件第一行加上 `#!/bin/bash`。使用 `sudoedit` 创建或编辑；若文件已存在，先检查内容再合并，不要用 `install /dev/null` 清空已有脚本：
+复用同一份[停服备份脚本](../scripts/worklog-backup.sh)，不另写一套逻辑：使用 `sudoedit` 将脚本完整内容保存到 `/usr/local/sbin/worklog-backup.sh`（包含首行 `#!/bin/bash`）；若文件已存在，先检查内容再合并，不要清空或直接覆盖已有脚本：
 
 ```bash
 sudoedit /usr/local/sbin/worklog-backup.sh
