@@ -3,7 +3,7 @@ import { computed, ref, watch } from 'vue'
 import { ElButton, ElSelect, ElOption } from 'element-plus'
 import { RiArrowLeftSLine, RiArrowRightSLine, RiCalendarScheduleLine, RiCheckLine, RiFileListLine } from '@remixicon/vue'
 import { getCalendarDay } from '../workCalendar'
-import { columns, dateToDay, dayToDate, todayISO, taskSchedule, ganttPlacement, ganttRange } from '../dashboard'
+import { columns, sortTasksForDisplay, dateToDay, dayToDate, todayISO, taskSchedule, ganttPlacement, ganttRange } from '../dashboard'
 
 const props = defineProps({
   tasks: { type: Array, default: () => [] }, projects: { type: Array, default: () => [] },
@@ -29,7 +29,7 @@ const days = computed(() => Array.from({ length: dayCount.value }, (_, i) => {
   const status = info.isWorkday ? '工作日' : '休息日'
   return { date, label: `${Number(date.slice(5, 7))}/${Number(date.slice(8))}`, weekday: '日一二三四五六'[weekday], type, title: `${date} 周${'日一二三四五六'[weekday]} · ${status}`, today: day === today.value }
 }))
-const scheduled = computed(() => props.tasks.flatMap(task => {
+const scheduled = computed(() => sortTasksForDisplay(props.tasks).flatMap(task => {
   const schedule = taskSchedule(task)
   return schedule ? [{ ...task, schedule, placement: ganttPlacement(task, rangeStart.value, dayCount.value) }] : []
 }))

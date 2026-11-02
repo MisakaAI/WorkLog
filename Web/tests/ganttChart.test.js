@@ -3,7 +3,7 @@ import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
 import { compileScript, parse } from '@vue/compiler-sfc'
 import { computed, nextTick, ref, watch } from 'vue'
-import { dateToDay, dayToDate, ganttPlacement, ganttRange } from '../src/dashboard.js'
+import { dateToDay, dayToDate, ganttPlacement, ganttRange, sortTasksForDisplay, taskSchedule } from '../src/dashboard.js'
 import { getCalendarDay, parseWorkCalendar } from '../src/workCalendar.js'
 
 const component = readFileSync(new URL('../src/components/GanttChart.vue', import.meta.url), 'utf8')
@@ -26,6 +26,19 @@ test('甘特图根据实际是否上班统一显示工作日和休息日', () =>
     assert.equal(day.type, type)
     assert.ok(day.title.endsWith(` · ${status}`))
   }
+})
+
+test('进度按状态及看板顺序排列，仅排除无日期任务，不修改任务数组', () => {
+  const props = { tasks: ['done', 'planned', 'progress', 'progress', 'planned', 'done'].map((status, id) => ({
+    id, status, startDate: id === 2 ? '' : '2026-07-06', date: '',
+  })) }
+  const original = structuredClone(props.tasks)
+  const expression = component.match(/const scheduled = computed\(([\s\S]*?)\nconst period/)[1].trim().slice(0, -1)
+  const scheduled = new Function('computed', 'sortTasksForDisplay', 'props', 'taskSchedule', 'ganttPlacement', 'rangeStart', 'dayCount', `return computed(${expression})`)(
+    computed, sortTasksForDisplay, props, taskSchedule, ganttPlacement, { value: dateToDay('2026-07-06') }, { value: 7 },
+  )
+  assert.deepEqual(scheduled.value.map(task => task.id), [3, 1, 4, 0, 5])
+  assert.deepEqual(props.tasks, original)
 })
 
 test('时间范围依次支持周、月、15天和30天，默认选择周', () => {
@@ -139,7 +152,8 @@ test('任务条内缩保留首尾日期和裁剪边界，单日任务不消失',
 
 test('甘特图复用主题阴影并保留滚动、粘性表头和键盘焦点', () => {
   const css = readFileSync(new URL('../src/style.css', import.meta.url), 'utf8')
-  assert.match(css, /\.gantt-scroll \{[^}]*overflow: auto;[^}]*box-shadow: var\(--shadow-inset\)/)
+  assert.match(css, /\.gantt-scroll \{[^}]*overflow-x: auto;[^}]*box-shadow: var\(--shadow-inset\)/)
+  assert.doesNotMatch(css, /\.gantt-scroll\s*\{[^}]*(?:max-height|\bheight)\s*:/)
   assert.match(css, /\.gantt-header \{[^}]*position: sticky;[^}]*top: 0/)
   assert.match(css, /\.gantt-task-name \{[^}]*position: sticky;[^}]*left: 0/)
   assert.match(css, /\.gantt-bar\.el-button:focus-visible \{[^}]*var\(--shadow-focus-visible\)/)

@@ -245,7 +245,7 @@ it('项目保存期间的后续修改串行保存，失败保留输入可失焦�
 it('配置后端时导入项目紧邻全部导出，移除取消和保存按钮', async () => {
   globalThis.WORKLOG_CONFIG.apiBaseUrl = '/api'
   open(); await flushPromises()
-  expect(wrapper.findAll('.project-dialog-actions button').map(button => button.text())).toEqual(['全部导出', '导入项目'])
+  expect(wrapper.findAll('.project-dialog-actions button').map(button => button.text())).toEqual(['导入项目', '全部导出'])
 })
 
 it('工作台加载失败后真实点击重试恢复，不渲染空工作台代替失败', async () => {

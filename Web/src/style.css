@@ -257,7 +257,7 @@ main { max-width: 1540px; padding: 32px 32px 48px; margin: 0 auto; }
 .gantt-legend i { width: 12px; height: 12px; border: 1px solid var(--border); border-radius: 4px; background: var(--surface); }
 .gantt-legend i.restday { box-shadow: var(--shadow-inset); }
 .gantt-calendar-status { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; padding: 0 24px 14px; color: var(--text-muted); font-size: 12px; }
-.gantt-scroll { overflow: auto; max-height: 480px; margin: 0 24px; border: 1px solid var(--border-soft); border-radius: 14px; background: var(--surface); box-shadow: var(--shadow-inset); scrollbar-width: thin; scrollbar-color: var(--border) var(--surface-soft); scroll-padding: 80px 12px 12px calc(var(--gantt-task-width) + 12px); }
+.gantt-scroll { overflow-x: auto; margin: 0 24px; border: 1px solid var(--border-soft); border-radius: 14px; background: var(--surface); box-shadow: var(--shadow-inset); scrollbar-width: thin; scrollbar-color: var(--border) var(--surface-soft); scroll-padding: 80px 12px 12px calc(var(--gantt-task-width) + 12px); }
 .gantt-scroll:focus-visible { outline: none; box-shadow: var(--shadow-focus); }
 .gantt-table { width: 100%; }
 .gantt-table-row { display: grid; grid-template-columns: var(--gantt-task-width) minmax(0, 1fr); }

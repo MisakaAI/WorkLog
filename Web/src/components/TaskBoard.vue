@@ -3,7 +3,7 @@ import { computed, ref, watch } from 'vue'
 import { RiArrowRightSLine, RiCheckLine, RiFileListLine } from '@remixicon/vue'
 import { ElButton, ElCard, ElCollapse, ElCollapseItem, ElEmpty, ElTag } from 'element-plus'
 import Icon from './Icon.vue'
-import { columns } from '../dashboard'
+import { columns, sortTasksForDisplay } from '../dashboard'
 
 const props = defineProps({ lanes: { type: Array, default: () => [] }, view: { type: String, default: '看板' } })
 const emit = defineEmits(['edit', 'create', 'move'])
@@ -108,7 +108,7 @@ function drop(event, lane, status) {
         </div>
         <div v-if="lane.tasks.length" class="list-columns" aria-hidden="true"><span>任务详情</span><span>分类 / 优先级</span><span>状态</span><span>起止日期</span><span></span></div>
         <ul class="list-rows">
-          <li v-for="task in lane.tasks" :key="task.id">
+          <li v-for="task in sortTasksForDisplay(lane.tasks)" :key="task.id">
             <ElButton class="list-task" :class="[`card-color-${task.color}`, { 'is-complete': task.status === 'done' }]" :aria-label="`编辑任务：${task.title}，${statusTitle(task.status)}`" :data-task-id="task.id" @click="emit('edit', task)">
               <span class="list-task-content">
                 <span class="list-task-main">

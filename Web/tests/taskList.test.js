@@ -22,7 +22,7 @@ test('列表模板可编译，保留看板拖动、列表编辑、新建与折�
   assert.match(component, /@dragstart="startDrag\(\$event, task\)"/)
   const list = component.slice(component.indexOf('<section v-else class="task-list"'))
   assert.match(list, /<ul class="list-rows">/)
-  assert.match(list, /<li v-for="task in lane.tasks" :key="task.id">/)
+  assert.match(list, /<li v-for="task in sortTasksForDisplay\(lane.tasks\)" :key="task.id">/)
   assert.match(list, /<ElButton class="list-task"[\s\S]*?@click="emit\('edit', task\)"/)
   assert.match(list, /emit\('create', \{ status: 'planned', projectId: lane.id \}\)/)
   assert.match(list, /<ElEmpty v-if="!lane.tasks.length"/)

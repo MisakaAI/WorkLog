@@ -1,6 +1,6 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { moveTaskToLane, filterTasks, parseDashboard } from '../src/dashboard.js'
+import { moveTaskToLane, filterTasks, parseDashboard, sortTasksForDisplay } from '../src/dashboard.js'
 import { readFileSync } from 'node:fs'
 
 const base = JSON.parse(readFileSync(new URL('./fixtures/dashboard.json', import.meta.url))).tasks[0]
@@ -13,6 +13,22 @@ function fixture(status = 'planned') {
   ] }
 }
 const order = data => data.tasks.filter(task => task.projectId === 'a').map(task => task.id)
+
+test('展示排序优先进行中、待开始、已完成，同状态保持看板顺序且不修改源数据', () => {
+  const tasks = ['done', 'planned', 'progress', 'planned', 'done', 'progress'].map((status, id) => ({ id, status }))
+  const original = structuredClone(tasks)
+  assert.deepEqual(sortTasksForDisplay(tasks).map(task => task.id), [2, 5, 1, 3, 0, 4])
+  assert.deepEqual(tasks, original)
+  assert.deepEqual(sortTasksForDisplay([]), [])
+})
+
+test('看板拖动后展示排序同步，同列顺序与筛选结果一致', () => {
+  const data = fixture('progress')
+  data.tasks.push({ ...base, id: 'planned', projectId: 'a', status: 'planned' })
+  moveTaskToLane(data, 3, 'progress', 'a', { targetId: 1, position: 'before' })
+  const tasks = filterTasks(data.tasks, { projectId: 'a' })
+  assert.deepEqual(sortTasksForDisplay(tasks).map(task => task.id), [3, 1, '2', 'planned'])
+})
 
 for (const status of ['planned', 'progress', 'done']) {
   test(`${status} 列支持上下拖动、首尾插入，保存重读保留顺序且不改日期`, () => {

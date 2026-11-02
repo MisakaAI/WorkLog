@@ -5,6 +5,12 @@ export const columns = [
   { id: 'progress', title: '进行中' },
   { id: 'done', title: '已完成' },
 ]
+// 仅用于列表和进度展示；稳定排序保留同一状态内的看板顺序，不修改原数组。
+export function sortTasksForDisplay(tasks) {
+  const rank = { progress: 0, planned: 1, done: 2 }
+  return [...tasks].sort((a, b) => (rank[a.status] ?? 3) - (rank[b.status] ?? 3))
+}
+
 export const tags = ['开发', '产品', '设计', '调研', '临时', '个人']
 export const priorities = ['低', '中', '高', '极高']
 export const cardColors = [
