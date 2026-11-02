@@ -11,9 +11,14 @@ import {
   RiSeparator, RiFormatClear, RiCodeSSlashLine, RiEraserLine,
 } from '@remixicon/vue'
 import { getTodayWorklog, getWorklog, saveWorklog } from '../api/worklog'
+import SourceCodeLoading from './SourceCodeLoading.vue'
 
 // 源码编辑器体积较大，仅在首次打开源码弹窗时加载。
-const SourceCodeEditor = defineAsyncComponent(() => import('./SourceCodeEditor.vue'))
+const SourceCodeEditor = defineAsyncComponent({
+  loader: () => import('./SourceCodeEditor.vue'),
+  loadingComponent: SourceCodeLoading,
+  delay: 0,
+})
 const props = defineProps({ date: { type: String, required: true } })
 const emit = defineEmits(['loaded', 'saved'])
 const dateLabel = computed(() => {
