@@ -24,7 +24,8 @@ tar --zstd -xf worklog-v<版本>-linux-x86_64.tar.zst
 cd worklog-v<版本>-linux-x86_64
 ```
 
-包内包含后端 `bin/worklog`、前端 `Web/dist/`、安装／卸载脚本、配置示例、systemd 模板和文档。安装脚本依赖这个布局，**不要直接在源码仓库运行 `scripts/install-linux.sh`**。需要自行打包时见[构建发布包](DEVELOPMENT.md#构建发布包)。
+包内仅包含后端 `bin/worklog`、前端 `Web/dist/`、`install.sh`、`uninstall.sh`、`ARCH` 和 `VERSION`，不含文档、README、配置示例或独立的 systemd 模板；服务单元内容内嵌于安装脚本。
+安装脚本依赖这个布局，**不要直接在源码仓库运行 `scripts/install-linux.sh`**。需要自行打包时见[构建发布包](DEVELOPMENT.md#构建发布包)。
 
 ### 2. 选择一种安装方式
 
@@ -108,9 +109,10 @@ systemctl --user restart worklog.service
 
 **先[备份](OPERATIONS.md)，再升级。** 解压新版，用与原安装相同的身份及 XDG 路径重新运行 `install.sh`：
 
-- 保留已有配置和数据，不自动合并新配置字段。
-- 准备好新文件后停止服务，再替换程序、整套前端和服务单元，最后启动。
-- 自定义服务单元会被覆盖，请先备份；持久调整优先使用 systemd drop-in。
+- 保留已有后端配置和数据，不自动合并新配置字段；后端配置仅在缺失时生成。
+- 保留安装目录 `Web/dist/` 中已有的 `config.json` 和 `work-calendar.json`（包括符号链接及文件元数据）；缺失时使用新版前端包中的文件。
+- 保留已有服务单元（包括符号链接、悬空链接和 mask），仅在缺失时创建，不覆盖自定义单元。
+- 准备好新文件后停止正在运行的服务，再替换程序和前端（保留上述两个文件），最后依次执行 `daemon-reload`、`enable` 和 `restart`。
 - 不保证失败后自动回滚。数据库迁移可能不可逆，换回旧程序不等于恢复旧数据库。
 
 系统服务只允许状态目录持久写入，并启用只读文件系统、隐藏 home、禁止提权等限制。若改用自定义数据或令牌路径，需同步调整权限和沙箱。用户服务以当前用户权限运行，不提供同等文件系统隔离。两者均使用 `UMask=0077`、异常退出重启和 SIGTERM 优雅退出。

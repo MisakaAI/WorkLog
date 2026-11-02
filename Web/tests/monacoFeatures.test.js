@@ -37,7 +37,7 @@ test('保留 HTML 编辑必需功能及弹出补全控制器，不注册高级�
 })
 
 test('源码组件仍为按需加载，HTML 语言及两个独立 worker 不受影响', () => {
-  assert.match(worklog, /defineAsyncComponent\(\(\) => import\('\.\/SourceCodeEditor\.vue'\)\)/)
+  assert.match(worklog, /defineAsyncComponent\(\{\s*loader:\s*\(\)\s*=>\s*import\('\.\/SourceCodeEditor\.vue'\)/)
   assert.match(worklog, /<SourceCodeEditor v-if="sourceVisible"/)
   assert.match(source, /import 'monaco-editor\/languages\/definitions\/html\/register\.js'/)
   assert.match(source, /import 'monaco-editor\/language\/html\/monaco\.contribution\.js'/)

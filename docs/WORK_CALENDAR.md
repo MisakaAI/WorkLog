@@ -5,7 +5,7 @@
 ## 文件位置与生效方式
 
 - **开发或构建前**：编辑 `Web/public/work-calendar.json`。Vite 开发服务直接提供该文件，`cd Web && npm run build` 会将它复制到 `Web/dist/work-calendar.json`。
-- **Linux 或独立静态部署**：替换前端发布目录中的 `work-calendar.json`。Go 默认目录是 `Web/dist`；自定义 `static_dir` 时，替换该目录中的文件。升级可能覆盖此文件，请另存自定义副本。
+- **Linux 或独立静态部署**：替换前端发布目录中的 `work-calendar.json`。Go 默认目录是 `Web/dist`；自定义 `static_dir` 时，替换该目录中的文件。Linux 发布包的 `install.sh` 升级会保留安装目录 `Web/dist/work-calendar.json`（包括符号链接及文件元数据），仅在缺失时使用新版包中的文件；手动部署或替换整套前端仍可能覆盖，请另存自定义副本。
 - **Windows／macOS 桌面版**：资源嵌入程序，不能用磁盘文件覆盖。需在构建前修改 `Web/public/work-calendar.json`，再重新构建桌面版。
 - **Docker**：可修改源文件后重建镜像，或在 Compose 对应用服务添加只读挂载：
 

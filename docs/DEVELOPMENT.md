@@ -164,7 +164,7 @@ Playwright 自动构建并启动一次性 SQLite 后端，不访问个人数据�
 
 脚本均执行 `npm ci` 和前端生产构建。Go 不在 PATH 时可用 `GO=/path/to/go bash scripts/build-linux.sh`，其他构建脚本也支持 `GO`。
 
-- Linux 额外需要 tar、zstd。脚本使用 `CGO_ENABLED=0` 交叉构建两种架构，目标主机不需要编译工具。安装脚本依赖发布包布局，**不要直接在源码目录运行 `scripts/install-linux.sh`**。
+- Linux 额外需要 tar、zstd。脚本使用 `CGO_ENABLED=0` 交叉构建两种架构，目标主机不需要编译工具。包内仅含 `bin/worklog`、`Web/dist/`、`install.sh`、`uninstall.sh`、`ARCH` 和 `VERSION`，不含文档、README、配置示例或独立的 systemd 模板；服务单元内容内嵌于安装脚本。安装脚本依赖发布包布局，**不要直接在源码目录运行 `scripts/install-linux.sh`**。
 - Windows 可在 Linux 交叉构建，不需要 Windows SDK、MinGW 或 Wine。资源编译器由脚本下载固定版本，细节见 [Windows 构建](WINDOWS_DESKTOP.md#构建)。
 - macOS 需要 CGO、Xcode Command Line Tools 和 Apple SDK，不能以普通 Linux 交叉编译代替。另一架构、DMG 检查及签名限制见 [macOS 构建](MACOS_DESKTOP.md#在-mac-上构建-app-和-dmg)。
 

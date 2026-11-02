@@ -22,18 +22,14 @@ for arch in amd64 arm64; do
     [[ "$arch" != amd64 ]] || label=x86_64
     name="worklog-v${VERSION}-linux-${label}"
     package="$STAGE/$name"
-    mkdir -p "$package/bin" "$package/Web" "$package/docs"
+    mkdir -p "$package/bin" "$package/Web"
     GOOS=linux GOARCH="$arch" CGO_ENABLED=0 \
         "$GO" build -trimpath -buildvcs=false -ldflags '-s -w' \
         -o "$package/bin/worklog" ./cmd/worklog
     cp -R "$ROOT/Web/dist" "$package/Web/dist"
-    cp "$ROOT/config.example.json" "$ROOT/config.docker.example.json" \
-        "$ROOT/config.postgres.example.json" "$ROOT/README.md" "$package/"
-    cp "$ROOT/Web/README.md" "$package/Web/README.md"
     # Generated release metadata, never an input to version selection.
     printf '%s\n' "$VERSION" > "$package/VERSION"
     printf '%s\n' "$arch" > "$package/ARCH"
-    cp "$ROOT"/docs/*.md "$ROOT/docs/worklog.service" "$package/docs/"
     cp "$ROOT/scripts/install-linux.sh" "$package/install.sh"
     cp "$ROOT/scripts/uninstall-linux.sh" "$package/uninstall.sh"
     chmod 755 "$package/install.sh" "$package/uninstall.sh" "$package/bin/worklog"

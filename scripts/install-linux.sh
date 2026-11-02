@@ -45,7 +45,7 @@ else
     DATA="${XDG_DATA_HOME:-$HOME/.local/share}/worklog/data"
     UNIT="${XDG_CONFIG_HOME:-$HOME/.config}/systemd/user/worklog.service"
     CTL=(systemctl --user)
-    "${CTL[@]}" show-environment >/dev/null || die 'Cannot connect to the current user systemd manager. Log in normally (do not use sudo -u); see docs/DEPLOYMENT.md.'
+    "${CTL[@]}" show-environment >/dev/null || die 'Cannot connect to the current user systemd manager. Log in normally (do not use sudo -u) with a running user systemd manager.'
 fi
 # Keep generated JSON/systemd paths unambiguous; ordinary spaces are supported.
 for path in "$APP" "$CONFIG" "$DATA" "$UNIT"; do
@@ -69,6 +69,16 @@ install -m 755 "$PACKAGE/bin/worklog" "$STAGE/bin/worklog"
 cp -R "$PACKAGE/Web/dist" "$STAGE/dist"
 find "$STAGE/dist" -type d -exec chmod 755 {} +
 find "$STAGE/dist" -type f -exec chmod 644 {} +
+# These public runtime settings belong to the installation, not the release.
+# Materialize live symlinks with their contents and metadata before old dist is
+# removed (their targets may be inside it). Retain dangling symlinks as links.
+for config in config.json work-calendar.json; do
+    if [[ -e "$APP/Web/dist/$config" ]]; then
+        cp -aL --remove-destination -- "$APP/Web/dist/$config" "$STAGE/dist/$config"
+    elif [[ -L "$APP/Web/dist/$config" ]]; then
+        cp -a --remove-destination -- "$APP/Web/dist/$config" "$STAGE/dist/$config"
+    fi
+done
 
 if (( EUID == 0 )); then
     install -d -o root -g "$GROUP" -m 750 "$CONFIG"
@@ -87,7 +97,34 @@ if [[ ! -e "$CONFIG/config.json" && ! -L "$CONFIG/config.json" ]]; then
     fi
 fi
 if (( EUID == 0 )); then
-    cp "$PACKAGE/docs/worklog.service" "$STAGE/worklog.service"
+    # Keep the root service directives in sync with docs/worklog.service.
+    # Embedded so installation does not depend on documentation in the package.
+    printf '%s\n' '[Unit]
+Description=Worklog web and MCP server
+Wants=network-online.target
+After=network-online.target
+StartLimitIntervalSec=60
+StartLimitBurst=5
+
+[Service]
+User=worklog
+WorkingDirectory=/var/lib/worklog
+ExecStart=/opt/worklog/bin/worklog --conf=/etc/worklog serve
+Restart=on-failure
+RestartSec=5s
+TimeoutStopSec=30s
+StateDirectory=worklog
+StateDirectoryMode=0700
+UMask=0077
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+CapabilityBoundingSet=
+RestrictSUIDSGID=true
+
+[Install]
+WantedBy=multi-user.target' > "$STAGE/worklog.service"
 else
     # User services cannot rely on privileged mount namespaces or StateDirectory.
     # In particular, ProtectHome would hide this installation's own files.
@@ -104,9 +141,13 @@ mv -f -- "$STAGE/bin/worklog" "$APP/bin/worklog"
 rm -rf -- "$APP/Web/dist"
 mv -- "$STAGE/dist" "$APP/Web/dist"
 install -m 644 "$PACKAGE/VERSION" "$APP/VERSION"
-install -m 644 "$STAGE/worklog.service" "$UNIT"
+# A local unit (including a symlink or mask) is administrator-owned configuration.
+if [[ ! -e "$UNIT" && ! -L "$UNIT" ]]; then
+    install -m 644 "$STAGE/worklog.service" "$UNIT"
+fi
 "${CTL[@]}" daemon-reload
-"${CTL[@]}" enable --now worklog.service
+"${CTL[@]}" enable worklog.service
+"${CTL[@]}" restart worklog.service
 sleep 2
 if ! "${CTL[@]}" is-active --quiet worklog.service; then
     "${CTL[@]}" status worklog.service --no-pager || true
