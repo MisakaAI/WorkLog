@@ -264,7 +264,6 @@ onBeforeUnmount(() => {
       </div>
     </div>
     <ElDialog v-model="sourceVisible" title="HTML 源代码" width="min(800px, 92vw)" :close-on-click-modal="false" :before-close="closeSource">
-      <p class="source-hint">编辑后点击“保存”同步到日志。仅保留编辑器支持的格式，不支持的标签及脚本将被过滤；应用前不会自动保存源码修改。</p>
       <SourceCodeEditor v-if="sourceVisible" v-model="sourceHTML" />
       <p v-if="sourceError" class="save-error" role="alert">{{ sourceError }}</p>
       <template #footer><ElButton @click="closeSource()">取消</ElButton><ElButton type="primary" size="default" class="management-button" :disabled="locked || saving" @click="applySource">保存</ElButton></template>
@@ -305,7 +304,6 @@ onBeforeUnmount(() => {
 .font-color-picker :deep(.el-color-picker__trigger)::after { content: ''; width: 0; height: 0; border: 4px solid transparent; border-bottom: 0; border-top-color: var(--text-secondary); }
 .font-color-picker :deep(.el-color-picker:not(.is-disabled):hover) { background: var(--focus-surface); }
 .font-color-picker :deep(.el-color-picker.is-disabled .el-color-picker__trigger)::after { opacity: 0.4; }
-.source-hint { color: var(--text-secondary); font-size: 13px; margin-bottom: 12px; }
 .worklog-save-info { display: flex; flex-direction: column; gap: 4px; }
 .worklog-save-actions { display: flex; justify-content: flex-end; align-items: center; flex-wrap: wrap; gap: 12px; margin-left: auto; }
 .save-error { color: var(--red-fg); }

@@ -507,7 +507,6 @@ onMounted(load)
       </ElDialog>
 
       <ElDialog v-model="projectDialog" title="项目管理" width="min(620px, 92vw)" @closed="resetProjectDrag">
-        <p class="project-help">拖动排序手柄调整项目顺序。归档后项目及其任务不再展示，可在“已归档”中恢复。新增和修改名称在失去焦点后自动保存，排序在操作结束后自动保存，归档和恢复即时生效。删除项目需输入项目名称确认，确认后立即删除项目及其所有任务，无法恢复。导出仅包含已保存的项目、关联任务和分类，不包含未分配任务、待办或工作日志。</p>
         <ElForm class="project-form" @submit.prevent="addDraftProject">
           <div class="project-add"><ElInput v-model="newProjectName" placeholder="新项目名称" aria-label="新项目名称" maxlength="40" @blur="addDraftProject" @keydown.enter.prevent="addDraftProject" /><ElButton @click="addDraftProject"><Icon name="Add" :size="16" />添加</ElButton></div>
           <ElTabs class="project-status-tabs" :model-value="showArchivedProjects ? 'archived' : 'active'" @tab-change="showArchivedProjects = $event === 'archived'; resetProjectDrag()">
@@ -527,14 +526,13 @@ onMounted(load)
             <ElEmpty v-if="!visibleDraftProjects.length" :image-size="48" :description="showArchivedProjects ? '暂无已归档项目。' : '暂无进行中的项目。'" />
           </div>
           <div class="dialog-actions project-dialog-actions">
-            <ElButton :disabled="transferringProjects || persisting" @click="downloadProject()"><RiUpload2Line :size="17" aria-hidden="true" />全部导出</ElButton>
             <ElButton v-if="hasBackend" :disabled="transferringProjects || persisting" @click="projectImportInput?.click()"><RiDownload2Line :size="17" aria-hidden="true" />导入项目</ElButton>
+            <ElButton :disabled="transferringProjects || persisting" @click="downloadProject()"><RiUpload2Line :size="17" aria-hidden="true" />全部导出</ElButton>
             <input v-if="hasBackend" ref="projectImportInput" type="file" accept=".zip,application/zip" aria-label="选择项目 ZIP 文件" hidden @change="uploadProjects" />
           </div>
         </ElForm>
       </ElDialog>
       <ElDialog v-model="categoryDialog" title="分类管理" width="min(500px, 92vw)" @closed="resetCategoryDrag">
-        <p class="project-help">拖动排序手柄调整分类顺序，下拉选项也将按此顺序显示。分类名称修改会同步更新关联任务。删除分类后，关联任务移至保存列表的第一个分类；至少保留一个分类。修改后点击保存生效。</p>
         <ElForm @submit.prevent="saveCategories">
           <div class="project-add"><ElInput v-model="newCategoryName" placeholder="新分类名称" aria-label="新分类名称" maxlength="40" @keydown.enter.prevent="addDraftCategory" /><ElButton @click="addDraftCategory"><RiAddFill size="16" aria-hidden="true" />添加</ElButton></div>
           <div class="project-edit-list project-sort-list" @dragover="previewCategoryDrop" @dragleave="leaveCategoryList" @drop.prevent.stop="dropCategory">
