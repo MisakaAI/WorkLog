@@ -5,7 +5,7 @@ import {
   ElForm, ElFormItem, ElInput, ElSelect, ElOption, ElMessage, ElMessageBox,
   ElRadioGroup, ElRadioButton, ElTabs, ElTabPane,
 } from 'element-plus'
-import { RiAddFill, RiFilterLine, RiFilterOffLine, RiInboxArchiveLine, RiInboxUnarchiveLine, RiUpload2Line, RiDownload2Line } from '@remixicon/vue'
+import { RiAddFill, RiFilterLine, RiFilterOffLine, RiInboxArchiveLine, RiInboxUnarchiveLine, RiUpload2Line, RiDownload2Line, RiGithubLine } from '@remixicon/vue'
 import zhCn from 'element-plus/es/locale/lang/zh-cn'
 import 'dayjs/locale/zh-cn'
 import { getWorklogDates, hasWorklogContent } from './api/worklog'
@@ -395,9 +395,14 @@ onMounted(load)
         </div>
         <span v-if="persisting" role="status">正在保存工作台…</span>
         <span class="topbar-date">{{ todayLabel }}</span>
+        <div class="topbar-actions">
+        <ElButton v-if="!hasBackend" tag="a" href="https://github.com/MisakaAI/WorkLog" target="_blank" rel="noopener noreferrer" class="theme-toggle icon-button" aria-label="项目 GitHub 仓库" title="项目 GitHub 仓库">
+          <RiGithubLine size="18" aria-hidden="true" />
+        </ElButton>
         <ElButton class="theme-toggle icon-button" :aria-pressed="isDark" :aria-label="isDark ? '切换到浅色模式' : '切换到暗色模式'" :title="isDark ? '切换到浅色模式' : '切换到暗色模式'" @click="toggleTheme">
           <Icon :name="isDark ? 'Sun' : 'Moon'" :size="18" />
         </ElButton>
+        </div>
       </header>
 
       <main v-if="data">

@@ -59,6 +59,7 @@ a:focus-visible, button:focus-visible, [role='button']:focus-visible, .el-button
 .personal-label-button:focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; }
 .personal-label-button:disabled { cursor: default; }
 .brand { flex-shrink: 0; }
+.topbar-actions { display: flex; align-items: center; gap: 8px; }
 .theme-toggle.el-button { background: var(--page); border-color: var(--edge-light); color: var(--text-secondary); box-shadow: var(--shadow-raised); outline: none; }
 .theme-toggle.el-button:focus-visible { outline: none; box-shadow: var(--shadow-raised), var(--shadow-focus-visible); }
 main { max-width: 1540px; padding: 32px 32px 48px; margin: 0 auto; }
@@ -485,7 +486,7 @@ main { max-width: 1540px; padding: 32px 32px 48px; margin: 0 auto; }
 }
 @media (max-width: 380px) {
   .topbar-date { display: none; }
-  .theme-toggle { margin-left: auto; }
+  .topbar-actions { margin-left: auto; }
 }
 /* 高对比模式可能隐藏阴影，回退为系统焦点线。 */
 @media (forced-colors: active) {
