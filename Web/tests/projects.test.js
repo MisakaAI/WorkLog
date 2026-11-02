@@ -23,24 +23,24 @@ test('读取项目和任务归属，拒绝无效、重复和保留项目 ID', ()
   }
 })
 
-test('按项目构建非空泳道，筛选可与分类和优先级组合', () => {
+test('按项目构建泳道，筛选可与分类和优先级组合', () => {
   const { tasks, projects } = fixture()
   assert.deepEqual(projectLanes(tasks, projects).map(lane => [lane.name, lane.tasks.length]), [['项目 A', 1], ['项目 B', 1], ['未分配', 1]])
   const filtered = filterTasks(tasks, { projectId: 'a', search: 'api', priorityOnly: true })
   assert.deepEqual(filtered.map(task => task.id), [1])
   assert.deepEqual(projectLanes(filtered, projects, 'a').map(lane => lane.id), ['a'])
   assert.deepEqual(filterTasks(tasks, { projectId: '', tag: '临时' }).map(task => task.id), [3])
-  assert.equal(projectLanes([], projects).length, 0)
+  assert.deepEqual(projectLanes([], projects).map(lane => [lane.id, lane.tasks.length]), [['a', 0], ['b', 0]])
   assert.equal(filterTasks(tasks, { projectId: 'a', tag: '设计' }).length, 0)
 })
 
-test('空项目和未分配分组均隐藏，筛选后无任务的项目也隐藏', () => {
+test('空项目及筛选后无任务的项目保留，仅隐藏空的未分配分组', () => {
   const { tasks, projects } = fixture()
   const onlyAssigned = tasks.filter(task => task.projectId === 'a')
-  assert.deepEqual(projectLanes(onlyAssigned, [...projects, { id: 'c', name: '空项目' }]).map(lane => lane.id), ['a'])
-  assert.deepEqual(projectLanes(onlyAssigned, projects, 'b'), [])
+  assert.deepEqual(projectLanes(onlyAssigned, [...projects, { id: 'c', name: '空项目' }]).map(lane => lane.id), ['a', 'b', 'c'])
+  assert.deepEqual(projectLanes(onlyAssigned, projects, 'b').map(lane => [lane.id, lane.tasks.length]), [['b', 0]])
   assert.deepEqual(projectLanes(onlyAssigned, projects, ''), [])
-  assert.deepEqual(projectLanes(tasks.filter(task => !task.projectId), projects).map(lane => lane.id), [''])
+  assert.deepEqual(projectLanes(tasks.filter(task => !task.projectId), projects).map(lane => lane.id), ['a', 'b', ''])
 })
 
 test('跨泳道拖拽同时修改项目和状态，拒绝无效数据，不影响其他任务', () => {
@@ -147,7 +147,7 @@ test('项目排序不改变草稿源数据，保存重读保留顺序，未分�
   assert.deepEqual(projects.map(project => project.id), ['a', 'b', 'c'])
   assert.deepEqual(reorderProjects(sorted, 'c', 'b').map(project => project.id), ['a', 'b', 'c'])
   const saved = parseDashboard(JSON.parse(JSON.stringify(replaceProjects(data, sorted))))
-  assert.deepEqual(projectLanes(saved.tasks, saved.projects).map(lane => lane.id), ['a', 'b', ''])
+  assert.deepEqual(projectLanes(saved.tasks, saved.projects).map(lane => lane.id), ['c', 'a', 'b', ''])
   assert.deepEqual(saved.tasks, data.tasks)
   for (const [source, target] of [['', 'a'], ['a', ''], ['unknown', 'a'], ['a', 'unknown'], ['a', 'a'], ['a', undefined]]) {
     assert.equal(reorderProjects(projects, source, target), projects)

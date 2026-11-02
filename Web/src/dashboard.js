@@ -120,7 +120,7 @@ export function projectLanes(tasks, projects, projectId = ALL_PROJECTS) {
   return [...projects, { id: '', name: '未分配' }]
     .filter(project => projectId === ALL_PROJECTS || project.id === projectId)
     .map(project => ({ ...project, tasks: tasks.filter(task => task.projectId === project.id) }))
-    .filter(project => project.tasks.length > 0)
+    .filter(project => project.id !== '' || project.tasks.length > 0)
 }
 
 // 拖动时兼容数字和字符串 ID；仅在指定状态流转、日期为空且区间合法时补入浏览器当天日期。

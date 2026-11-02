@@ -5,8 +5,8 @@ import GanttChart from '../../src/components/GanttChart.vue'
 
 it('项目 __unassigned__ 与合成未分配泳道拥有独立展开状态', async () => {
   const wrapper = shallowMount(TaskBoard, { props: { lanes: [
-    { id: '__unassigned__', name: '合法项目', tasks: [] },
-    { id: '', name: '未分配', tasks: [] },
+    { id: '__unassigned__', name: '合法项目', tasks: [{ status: 'planned' }] },
+    { id: '', name: '未分配', tasks: [{ status: 'planned' }] },
   ] }, global: { renderStubDefaultSlot: true } })
   try {
     const collapse = wrapper.findComponent({ name: 'ElCollapse' })
@@ -14,6 +14,27 @@ it('项目 __unassigned__ 与合成未分配泳道拥有独立展开状态', asy
     collapse.vm.$emit('update:modelValue', ['unassigned'])
     await wrapper.setProps({ view: '列表' })
     expect(collapse.props('modelValue')).toEqual(['unassigned'])
+  } finally { wrapper.unmount() }
+})
+
+it('空项目默认折叠且可手动展开，任务有无变化时更新默认状态', async () => {
+  const lane = (id, tasks = []) => ({ id, name: id, tasks })
+  const wrapper = shallowMount(TaskBoard, { props: { lanes: [lane('empty'), lane('active', [{ status: 'planned' }])] }, global: { renderStubDefaultSlot: true } })
+  try {
+    const collapse = wrapper.findComponent({ name: 'ElCollapse' })
+    expect(wrapper.findAllComponents({ name: 'ElCollapseItem' })).toHaveLength(2)
+    expect(collapse.props('modelValue')).toEqual(['project:active'])
+    collapse.vm.$emit('update:modelValue', ['project:empty'])
+    await wrapper.setProps({ view: '列表' })
+    expect(collapse.props('modelValue')).toEqual(['project:empty'])
+    await wrapper.setProps({ lanes: [lane('empty'), lane('active', [{ status: 'done' }])] })
+    expect(collapse.props('modelValue')).toEqual(['project:empty'])
+    await wrapper.setProps({ lanes: [lane('empty', [{ status: 'planned' }]), lane('active')] })
+    expect(collapse.props('modelValue')).toEqual(['project:empty'])
+    await wrapper.setProps({ lanes: [lane('empty'), lane('active')] })
+    expect(collapse.props('modelValue')).toEqual([])
+    await wrapper.setProps({ lanes: [lane('empty'), lane('active', [{ status: 'planned' }])] })
+    expect(collapse.props('modelValue')).toEqual(['project:active'])
   } finally { wrapper.unmount() }
 })
 

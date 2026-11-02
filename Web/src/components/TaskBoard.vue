@@ -47,9 +47,12 @@ function endDrag() {
   dropPlacement.value = null
 }
 const laneKey = lane => lane.id ? `project:${lane.id}` : 'unassigned'
-// 筛选变化时保留已有分组的折叠选择，仅将新出现的分组默认展开。
-watch(() => props.lanes.map(laneKey), (keys, previous = []) => {
-  expanded.value = [...expanded.value.filter(key => keys.includes(key)), ...keys.filter(key => !previous.includes(key))]
+// 空项目默认折叠；任务有无变化时更新默认状态，其余情况保留手动折叠选择。
+watch(() => props.lanes.map(lane => ({ key: laneKey(lane), hasTasks: lane.tasks.length > 0 })), (lanes, previous = []) => {
+  const previousStates = new Map(previous.map(lane => [lane.key, lane.hasTasks]))
+  expanded.value = lanes.filter(lane => previousStates.get(lane.key) === lane.hasTasks
+    ? expanded.value.includes(lane.key)
+    : lane.hasTasks).map(lane => lane.key)
 }, { immediate: true })
 const tagClass = value => ({ 产品: 'blue', 设计: 'purple', 开发: 'green', 调研: 'orange', 个人: 'neutral', 临时: 'neutral' }[value] || 'neutral')
 const priorityClass = value => ({ 低: 'low', 中: 'medium', 高: 'high', 极高: 'urgent' }[value])
